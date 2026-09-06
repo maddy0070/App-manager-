@@ -11,3 +11,6 @@ captures/
 *.aab
 *.keystore
 !debug.keystore
+# The installable build is committed on purpose so it can be downloaded and sideloaded
+# without a toolchain. Rebuild it with ./gradlew assembleRelease.
+!release/*.apk
