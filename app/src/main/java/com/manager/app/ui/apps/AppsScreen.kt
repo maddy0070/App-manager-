@@ -43,7 +43,6 @@ import com.manager.app.design.components.EmptyState
 import com.manager.app.design.components.ManagerIconButton
 import com.manager.app.design.components.ManagerSearchField
 import com.manager.app.design.components.ProgressRail
-import com.manager.app.design.components.Txt
 import com.manager.app.ui.DetailRequest
 import com.manager.app.ui.ManagerViewModel
 import com.manager.app.ui.common.PullToRefresh

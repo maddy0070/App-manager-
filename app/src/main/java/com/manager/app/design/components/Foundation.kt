@@ -3,7 +3,6 @@ package com.manager.app.design.components
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Box
@@ -18,14 +17,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -149,39 +145,3 @@ fun Hairline(modifier: Modifier = Modifier, color: Color = ManagerTheme.colors.h
     val thickness = with(LocalDensity.current) { (1f / density).dp }
     Box(modifier.fillMaxWidth().height(thickness).background(color))
 }
-
-/** Fades the top and bottom edges of a scrolling region into the canvas. */
-fun Modifier.edgeFade(top: Float, bottom: Float, color: Color): Modifier = drawWithContent {
-    drawContent()
-    if (top > 0f) {
-        drawRect(
-            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                0f to color,
-                1f to Color.Transparent,
-                startY = 0f,
-                endY = top,
-            ),
-            size = androidx.compose.ui.geometry.Size(size.width, top),
-        )
-    }
-    if (bottom > 0f) {
-        drawRect(
-            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                0f to Color.Transparent,
-                1f to color,
-                startY = size.height - bottom,
-                endY = size.height,
-            ),
-            topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - bottom),
-            size = androidx.compose.ui.geometry.Size(size.width, bottom),
-        )
-    }
-}
-
-internal val NoRole: Role? = null
-internal val TransparentBrush = SolidColor(Color.Transparent)
-
-/** Material's indication, kept only where a screen reader or keyboard focus needs it. */
-@Composable
-fun Modifier.subtleIndication(interactionSource: MutableInteractionSource): Modifier =
-    indication(interactionSource, androidx.compose.material3.ripple())

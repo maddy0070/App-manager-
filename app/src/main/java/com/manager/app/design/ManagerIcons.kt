@@ -31,7 +31,7 @@ private fun icon(name: String, block: PathBuilder.() -> Unit): ImageVector =
         )
     }.build()
 
-/** A control knob sitting on a rail — used by the filter and sort marks. */
+/** A control knob sitting on a rail — the settings mark is built from two of them. */
 private fun PathBuilder.knob(cx: Float, cy: Float, r: Float = 2.1f) {
     moveTo(cx - r, cy)
     arcToRelative(r, r, 0f, true, true, 2 * r, 0f)
@@ -66,27 +66,8 @@ object ManagerIcons {
         moveTo(17.6f, 6.4f); lineTo(6.4f, 17.6f)
     }
 
-    val ArrowLeft: ImageVector = icon("arrow_left") {
-        moveTo(19f, 12f); lineTo(5.4f, 12f)
-        moveTo(11.2f, 5.6f); lineTo(4.8f, 12f); lineTo(11.2f, 18.4f)
-    }
-
-    val ChevronRight: ImageVector = icon("chevron_right") {
-        moveTo(9.5f, 5.5f); lineTo(16f, 12f); lineTo(9.5f, 18.5f)
-    }
-
     val ChevronDown: ImageVector = icon("chevron_down") {
         moveTo(5.5f, 9.5f); lineTo(12f, 16f); lineTo(18.5f, 9.5f)
-    }
-
-    /** Filter — three tuned rails, deliberately not the generic funnel. */
-    val Filter: ImageVector = icon("filter") {
-        moveTo(4f, 7.5f); lineTo(20f, 7.5f)
-        moveTo(4f, 12f); lineTo(20f, 12f)
-        moveTo(4f, 16.5f); lineTo(20f, 16.5f)
-        knob(9.2f, 7.5f)
-        knob(16.4f, 12f)
-        knob(11.6f, 16.5f)
     }
 
     val Sort: ImageVector = icon("sort") {
@@ -225,11 +206,6 @@ object ManagerIcons {
         arcToRelative(8.2f, 8.2f, 0f, true, true, 0f, -16.4f); close()
         moveTo(12f, 7.6f); lineTo(12f, 12.9f)
         moveTo(12f, 15.9f); lineTo(12f, 16.5f)
-    }
-
-    val Plus: ImageVector = icon("plus") {
-        moveTo(12f, 5.2f); lineTo(12f, 18.8f)
-        moveTo(5.2f, 12f); lineTo(18.8f, 12f)
     }
 
     val ArrowUpRight: ImageVector = icon("arrow_up_right") {

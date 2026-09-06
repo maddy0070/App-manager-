@@ -44,13 +44,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.manager.app.ManagerGraph
 import com.manager.app.design.ManagerIcons
 import com.manager.app.design.ManagerTheme
 import com.manager.app.design.SquircleShape
-import com.manager.app.design.components.ButtonTone
 import com.manager.app.design.components.ManagerButton
 import com.manager.app.design.components.ManagerIcon
 import com.manager.app.design.components.ManagerMark
@@ -58,7 +56,6 @@ import com.manager.app.design.components.ManagerTextAction
 import com.manager.app.design.components.Txt
 import com.manager.app.design.components.driftOffset
 import com.manager.app.ui.ManagerViewModel
-import kotlin.math.roundToInt
 
 /**
  * Onboarding.

@@ -42,7 +42,6 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.manager.app.ManagerGraph
 import com.manager.app.data.AppEntry
@@ -81,10 +80,11 @@ internal fun ColumnScope.DetailContent(
     open: Float,
     headerIconAlpha: Float,
     onHeaderIconBounds: (Rect) -> Unit,
+    /** Applied to the handle and header, which together are the sheet's grab area. */
+    grabModifier: Modifier,
     onDismiss: () -> Unit,
     onExtract: () -> Unit,
     onUninstall: () -> Unit,
-    maxHeight: Dp,
 ) {
     val colors = ManagerTheme.colors
     val scrollState = rememberScrollState()
@@ -101,6 +101,7 @@ internal fun ColumnScope.DetailContent(
     Box(
         Modifier
             .fillMaxWidth()
+            .then(grabModifier)
             .padding(top = 12.dp, bottom = 4.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -117,6 +118,7 @@ internal fun ColumnScope.DetailContent(
     Row(
         Modifier
             .fillMaxWidth()
+            .then(grabModifier)
             .padding(start = 24.dp, end = 14.dp, top = 14.dp, bottom = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

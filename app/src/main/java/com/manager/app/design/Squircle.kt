@@ -11,7 +11,6 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
@@ -229,5 +228,3 @@ val LocalManagerShapes = staticCompositionLocalOf { ManagerShapes() }
 /** Icon tiles scale their radius with their size so a 28dp and a 64dp tile read identically. */
 fun iconTileShape(sizeDp: Dp, smoothing: Float = 0.85f): Shape =
     SquircleShape(sizeDp * 0.295f, smoothing)
-
-internal fun approxEquals(a: Float, b: Float) = abs(a - b) < 0.001f

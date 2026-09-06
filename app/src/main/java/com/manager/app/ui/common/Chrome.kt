@@ -2,7 +2,6 @@ package com.manager.app.ui.common
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -20,10 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.manager.app.design.ManagerTheme
 import com.manager.app.design.components.Txt
@@ -88,6 +83,9 @@ fun SectionHeader(
     }
 }
 
+/** After this many, everything arrives together: a long screen must not become a slow one. */
+private const val MAX_STAGGERED = 6
+
 /**
  * Staggered entrance for a screen's sections.
  *
@@ -102,8 +100,9 @@ fun StaggeredEntrance(
     content: @Composable () -> Unit,
 ) {
     var visible by remember(key) { mutableStateOf(false) }
+    val stagger = ManagerTheme.motion.stagger
     LaunchedEffect(key) {
-        kotlinx.coroutines.delay((index.coerceAtMost(6) * 42L))
+        kotlinx.coroutines.delay(index.coerceAtMost(MAX_STAGGERED) * stagger.toLong())
         visible = true
     }
     val progress by animateFloatAsState(
@@ -119,28 +118,4 @@ fun StaggeredEntrance(
     ) {
         content()
     }
-}
-
-/** Vertical rhythm between sections, expressed once so screens cannot drift apart. */
-@Composable
-fun SectionSpacer(height: Dp = ManagerTheme.space.section) {
-    Spacer(Modifier.height(height))
-}
-
-/** A hairline that fades out at both ends, used to separate content without boxing it in. */
-@Composable
-fun FadedRule(modifier: Modifier = Modifier, color: Color = ManagerTheme.colors.hairline) {
-    Box(
-        modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .background(
-                Brush.horizontalGradient(
-                    0f to Color.Transparent,
-                    0.1f to color,
-                    0.9f to color,
-                    1f to Color.Transparent,
-                ),
-            ),
-    )
 }

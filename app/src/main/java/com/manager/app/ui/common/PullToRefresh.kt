@@ -32,8 +32,8 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.manager.app.design.ManagerTheme
 import com.manager.app.design.SquircleShape
-import kotlinx.coroutines.launch
 import kotlin.math.pow
+import kotlinx.coroutines.launch
 
 /**
  * Refresh, in the product's own language.

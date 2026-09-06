@@ -76,29 +76,3 @@ fun ManagerMark(
         }
     }
 }
-
-/** The mark reduced to its hero tile — used where the full bento would be too busy. */
-@Composable
-fun ManagerMarkCompact(
-    modifier: Modifier = Modifier,
-    size: Dp = 28.dp,
-    color: Color = ManagerTheme.colors.signal,
-    accent: Color = ManagerTheme.colors.ember,
-) {
-    Box(modifier.size(size)) {
-        Box(
-            Modifier
-                .align(Alignment.TopStart)
-                .size(size * 0.66f)
-                .clip(SquircleShape(size * 0.23f, 0.8f))
-                .background(color),
-        )
-        Box(
-            Modifier
-                .align(Alignment.BottomEnd)
-                .size(size * 0.34f)
-                .clip(SquircleShape(size * 0.12f, 0.8f))
-                .background(accent),
-        )
-    }
-}

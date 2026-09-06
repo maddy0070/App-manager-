@@ -37,10 +37,10 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import com.manager.app.design.CapsuleShape
 import com.manager.app.data.AppFilter
 import com.manager.app.data.SortDirection
 import com.manager.app.data.SortKey
+import com.manager.app.design.CapsuleShape
 import com.manager.app.design.ManagerIcons
 import com.manager.app.design.ManagerTheme
 import com.manager.app.design.components.Hairline

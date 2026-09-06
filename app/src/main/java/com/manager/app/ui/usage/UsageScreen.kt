@@ -44,7 +44,6 @@ import com.manager.app.design.components.AppRowSkeleton
 import com.manager.app.design.components.ButtonTone
 import com.manager.app.design.components.EmptyState
 import com.manager.app.design.components.ManagerIconButton
-import com.manager.app.design.components.Panel
 import com.manager.app.design.components.RankBar
 import com.manager.app.design.components.SegmentedControl
 import com.manager.app.design.components.Txt

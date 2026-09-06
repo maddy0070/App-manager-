@@ -34,7 +34,6 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.util.concurrent.TimeUnit
 
 /** A transient message. Never a system Toast — the product draws its own. */
 @Immutable
@@ -133,7 +132,6 @@ class ManagerViewModel(private val graph: ManagerGraph) : ViewModel() {
     val extraction: StateFlow<ExtractionState?> = _extraction.asStateFlow()
 
     private val _uninstall = MutableStateFlow<UninstallState?>(null)
-    val uninstall: StateFlow<UninstallState?> = _uninstall.asStateFlow()
 
     /** Apps staged for removal, awaiting the product's own confirmation before Android's. */
     private val _uninstallConfirm = MutableStateFlow<List<AppEntry>>(emptyList())
@@ -339,7 +337,6 @@ class ManagerViewModel(private val graph: ManagerGraph) : ViewModel() {
     // ---- Preferences ------------------------------------------------------------------------
 
     fun setThemeMode(mode: ThemeMode) = viewModelScope.launch { graph.preferences.setThemeMode(mode) }
-    fun setIncludeSystem(value: Boolean) = viewModelScope.launch { graph.preferences.setIncludeSystem(value) }
     fun setHaptics(value: Boolean) = viewModelScope.launch { graph.preferences.setHaptics(value) }
     fun completeOnboarding() = viewModelScope.launch { graph.preferences.setOnboarded(true) }
 

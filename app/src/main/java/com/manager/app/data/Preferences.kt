@@ -25,7 +25,6 @@ data class ManagerPreferences(
     val loaded: Boolean = false,
     val onboarded: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.Light,
-    val includeSystemByDefault: Boolean = false,
     val usageWindow: UsageWindow = UsageWindow.Week,
     val sortKey: SortKey = SortKey.Name,
     val sortDirection: SortDirection = SortDirection.Ascending,
@@ -41,7 +40,6 @@ class PreferencesStore(private val context: Context) {
                 loaded = true,
                 onboarded = prefs[KeyOnboarded] ?: false,
                 themeMode = prefs[KeyTheme]?.toEnum(ThemeMode.entries) ?: ThemeMode.Light,
-                includeSystemByDefault = prefs[KeyIncludeSystem] ?: false,
                 usageWindow = prefs[KeyUsageWindow]?.toEnum(UsageWindow.entries) ?: UsageWindow.Week,
                 sortKey = prefs[KeySortKey]?.toEnum(SortKey.entries) ?: SortKey.Name,
                 sortDirection = prefs[KeySortDirection]?.toEnum(SortDirection.entries) ?: SortDirection.Ascending,
@@ -51,7 +49,6 @@ class PreferencesStore(private val context: Context) {
 
     suspend fun setOnboarded(value: Boolean) = edit { it[KeyOnboarded] = value }
     suspend fun setThemeMode(value: ThemeMode) = edit { it[KeyTheme] = value.name }
-    suspend fun setIncludeSystem(value: Boolean) = edit { it[KeyIncludeSystem] = value }
     suspend fun setUsageWindow(value: UsageWindow) = edit { it[KeyUsageWindow] = value.name }
     suspend fun setHaptics(value: Boolean) = edit { it[KeyHaptics] = value }
     suspend fun setSort(key: SortKey, direction: SortDirection) = edit {
@@ -66,7 +63,6 @@ class PreferencesStore(private val context: Context) {
     private companion object {
         val KeyOnboarded = booleanPreferencesKey("onboarded")
         val KeyTheme = stringPreferencesKey("theme_mode")
-        val KeyIncludeSystem = booleanPreferencesKey("include_system")
         val KeyUsageWindow = stringPreferencesKey("usage_window")
         val KeySortKey = stringPreferencesKey("sort_key")
         val KeySortDirection = stringPreferencesKey("sort_direction")
