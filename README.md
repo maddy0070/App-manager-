@@ -14,7 +14,7 @@ and transition in the app is drawn by this codebase.
 ```bash
 ./gradlew assembleRelease      # app/build/outputs/apk/release/app-release.apk  (~3 MB)
 ./gradlew assembleDebug        # installs alongside release as com.manager.app.debug
-./gradlew test                 # 61 unit + composition tests, no device needed
+./gradlew test                 # 71 unit, composition and interaction tests, no device
 ```
 
 The release variant is signed with the checked-in `app/debug.keystore`. That is deliberate for a
@@ -26,6 +26,13 @@ sideloaded personal build: the key is stable, so updates install over one anothe
 ---
 
 ## What it does
+
+**Onboarding** — a forty-second interactive story rather than a slideshow. A field of suspended
+objects; tap one and that object grows into a detail surface; drag the surface and the numbers
+fill in under your finger; hold an app to select it, pick two more and watch them converge into
+the selection capsule; then the whole scattered field resolves into the list the product is. It
+runs entirely on sample data, so it behaves identically on a fresh install with nothing scanned
+and nothing granted. Skippable from anywhere.
 
 **Overview** — a device summary: how many apps and the user/system split, storage broken down by
 origin, your five most-used apps, what arrived recently, a twelve-month install timeline, the
@@ -121,7 +128,7 @@ would mean scanning the device twice and letting two screens disagree about what
 
 ## Tests
 
-`./gradlew test` runs 61 tests with no device attached:
+`./gradlew test` runs 71 tests with no device attached:
 
 - **Format** — every unit, duration and date string the user reads.
 - **Insights** — dashboard derivation, including the cases that produce wrong numbers quietly:
@@ -131,3 +138,10 @@ would mean scanning the device twice and letting two screens disagree about what
   ratios, radii larger than the box, zero sizes.
 - **ScreenRender** — Robolectric renders the real Compose tree for every screen, both themes, plus
   each visualisation at its degenerate inputs and app names long enough to break a layout.
+- **StoryFlow** — plays the onboarding end to end with real gestures: taps an object open, drags
+  the surface to fill it in, long-presses to select, picks two more, and checks the story reaches
+  its ending with a working way out. Also runs the whole thing on a small phone.
+
+Both render suites run at the target device's size with native graphics. Robolectric's defaults
+are a 320x470 mdpi screen with stubbed text measurement that lays every string out one character
+wide — a composition that survives that has not been meaningfully checked.

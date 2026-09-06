@@ -92,11 +92,9 @@ fun AppRoot(viewModel: ManagerViewModel, graph: ManagerGraph) {
         ) { onboarded ->
             when (onboarded) {
                 null -> Box(Modifier.fillMaxSize().background(colors.canvas))
-                false -> OnboardingScreen(
-                    viewModel = viewModel,
-                    graph = graph,
-                    onFinish = { viewModel.completeOnboarding() },
-                )
+                // Onboarding runs on sample data alone — it needs nothing from the view model
+                // but the one call that ends it.
+                false -> OnboardingScreen(onFinish = { viewModel.completeOnboarding() })
                 true -> MainShell(viewModel = viewModel, graph = graph)
             }
         }

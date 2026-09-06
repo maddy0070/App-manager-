@@ -43,6 +43,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import java.util.concurrent.TimeUnit
 
 /**
@@ -54,7 +55,11 @@ import java.util.concurrent.TimeUnit
  * Every screen and every bespoke component is instantiated at least once here, in both themes.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+// The device this product targets, with real font metrics. Robolectric's defaults are a 320x470
+// mdpi screen and stubbed text measurement, which lays every string out one character wide — a
+// composition that survives that has not been meaningfully checked.
+@Config(sdk = [33], qualifiers = "w412dp-h915dp-xxhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ScreenRenderTest {
 
     @get:Rule
@@ -112,9 +117,10 @@ class ScreenRenderTest {
     }
 
     @Test
-    fun `onboarding shows its headline and its call to action`() {
+    fun `onboarding opens on the discovery beat with a way out`() {
         compose.setContent { ManagerTheme { AppRoot(viewModel, graph) } }
-        compose.onNodeWithText("Get started").assertIsDisplayed()
+        compose.onNodeWithText("There's a lot\ngoing on.").assertIsDisplayed()
+        compose.onNodeWithText("Skip intro").assertIsDisplayed()
     }
 
     @Test
