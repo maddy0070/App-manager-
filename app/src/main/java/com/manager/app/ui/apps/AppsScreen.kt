@@ -177,7 +177,9 @@ fun AppsScreen(viewModel: ManagerViewModel, graph: ManagerGraph) {
             PullToRefresh(
                 refreshing = refreshing,
                 onRefresh = viewModel::refresh,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
             ) {
                 when {
                     inventory.loading && !inventory.hasApps -> LoadingList(gutter, bottomInset)

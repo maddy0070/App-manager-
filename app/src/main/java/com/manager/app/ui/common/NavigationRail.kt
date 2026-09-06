@@ -222,7 +222,7 @@ fun SelectionBar(
         Spacer(Modifier.width(2.dp))
 
         SelectionGlyphButton(
-            icon = ManagerIcons.Grid,
+            icon = ManagerIcons.CheckSolid,
             description = if (allSelected) "Deselect all" else "Select all",
             onClick = onSelectAll,
             tint = if (allSelected) colors.onSurfaceInverse else colors.onSurfaceInverse.copy(alpha = 0.72f),

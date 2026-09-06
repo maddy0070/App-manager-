@@ -15,7 +15,7 @@ import java.io.IOException
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "manager_prefs")
 
-enum class ThemeMode(val label: String) { System("Follow system"), Light("Light"), Dark("Dark") }
+enum class ThemeMode(val label: String) { System("System"), Light("Light"), Dark("Dark") }
 
 data class ManagerPreferences(
     /**

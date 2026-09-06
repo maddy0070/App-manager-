@@ -156,7 +156,9 @@ fun UsageScreen(viewModel: ManagerViewModel, graph: ManagerGraph) {
             PullToRefresh(
                 refreshing = refreshing,
                 onRefresh = viewModel::refresh,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
             ) {
                 when {
                     !usageAccess -> UsagePermissionState(onGrant = viewModel::requestUsageAccess)
