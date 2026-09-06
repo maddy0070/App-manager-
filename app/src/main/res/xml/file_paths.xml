@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Where extracted APKs land when MediaStore is unavailable. -->
+    <external-files-path name="extracted" path="extracted/" />
+    <cache-path name="cache" path="/" />
+</paths>

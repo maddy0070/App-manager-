@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!--
+      Preferences only. Extracted APKs live in shared Downloads and the icon cache is disposable,
+      so there is nothing else here worth carrying to another device.
+    -->
+    <include domain="sharedpref" path="." />
+</full-backup-content>
