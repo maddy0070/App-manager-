@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Manager</string>
-    <string name="extraction_channel_name">APK extraction</string>
 </resources>

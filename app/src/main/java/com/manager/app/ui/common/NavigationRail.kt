@@ -238,7 +238,7 @@ fun SelectionBar(
             icon = ManagerIcons.Trash,
             description = "Uninstall",
             onClick = onUninstall,
-            tint = colors.ember,
+            tint = colors.emberOnInverse,
             enabled = canUninstall,
         )
     }
@@ -265,7 +265,8 @@ private fun SelectionGlyphButton(
             .clip(ManagerTheme.shapes.capsule)
             .background(fill)
             .clickable(interactionSource = interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(11.dp),
+            // 19dp glyph plus this padding is exactly the 44dp minimum.
+            .padding(12.5.dp),
     ) {
         ManagerIcon(
             icon,

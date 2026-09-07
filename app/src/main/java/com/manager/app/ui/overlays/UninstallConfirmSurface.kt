@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import com.manager.app.ManagerGraph
 import com.manager.app.data.AppEntry
@@ -68,6 +69,7 @@ fun UninstallConfirmSurface(
     onDismiss: () -> Unit,
 ) {
     val colors = ManagerTheme.colors
+    val sheetGutter = ManagerTheme.space.sheetGutter
     var rendered by remember { mutableStateOf(entries) }
     LaunchedEffect(entries) { if (entries.isNotEmpty()) rendered = entries }
 
@@ -83,6 +85,9 @@ fun UninstallConfirmSurface(
                 Modifier
                     .fillMaxSize()
                     .background(colors.scrim.copy(alpha = if (colors.isLight) 0.38f else 0.6f))
+                    // The scrim is a dismiss gesture, not a control. Left in the tree it reads
+                    // as a giant unlabelled button covering the screen.
+                    .clearAndSetSemantics { }
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -113,7 +118,7 @@ fun UninstallConfirmSurface(
                     .clip(ManagerTheme.shapes.sheet)
                     .background(colors.surface),
             ) {
-                Column(Modifier.padding(start = 26.dp, end = 26.dp, top = 28.dp)) {
+                Column(Modifier.padding(start = sheetGutter, end = sheetGutter, top = 28.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             Modifier
@@ -173,7 +178,7 @@ fun UninstallConfirmSurface(
 
                 if (removable.size > 1) {
                     Spacer(Modifier.height(20.dp))
-                    Hairline(Modifier.padding(horizontal = 26.dp))
+                    Hairline(Modifier.padding(horizontal = sheetGutter))
                     Column(
                         Modifier
                             .heightIn(max = 236.dp)
@@ -184,7 +189,7 @@ fun UninstallConfirmSurface(
                             Row(
                                 Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 26.dp, vertical = 9.dp),
+                                    .padding(horizontal = sheetGutter, vertical = 9.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 AppIcon(entry.packageName, entry.label, graph.icons, size = 30.dp)

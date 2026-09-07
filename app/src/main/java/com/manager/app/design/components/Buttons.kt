@@ -3,6 +3,7 @@ package com.manager.app.design.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
@@ -105,7 +107,7 @@ fun ManagerButton(
                 role = Role.Button,
                 onClick = onClick,
             )
-            .defaultMinSize(minHeight = if (compact) 40.dp else 52.dp)
+            .defaultMinSize(minHeight = if (compact) 44.dp else 52.dp)
             .padding(
                 horizontal = if (compact) 18.dp else 26.dp,
                 vertical = if (compact) 10.dp else 15.dp,
@@ -216,6 +218,8 @@ fun ManagerTextAction(
                 role = Role.Button,
                 onClick = onClick,
             )
+            // Small type, full-size target: the label is quiet, the hit area is not.
+            .defaultMinSize(minHeight = 44.dp)
             .padding(horizontal = 10.dp, vertical = 8.dp)
             .graphicsLayer { translationX = shift },
         verticalAlignment = Alignment.CenterVertically,
@@ -249,11 +253,14 @@ fun ManagerIcon(
     tint: Color = LocalContentColor.current,
     size: Dp = 20.dp,
 ) {
-    androidx.compose.material3.Icon(
+    // Drawn directly rather than through Material's Icon: this is the product's only icon
+    // primitive, and routing it through a component library that supplies nothing else would
+    // put a whole Material dependency behind one tint.
+    Image(
         imageVector = icon,
         contentDescription = contentDescription,
-        tint = tint,
         modifier = modifier.size(size),
+        colorFilter = if (tint == Color.Unspecified) null else ColorFilter.tint(tint),
     )
 }
 

@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import com.manager.app.data.ApkExtractor
 import com.manager.app.design.ManagerIcons
@@ -77,6 +78,9 @@ fun ExtractionSurface(
                 Modifier
                     .fillMaxSize()
                     .background(colors.scrim.copy(alpha = if (colors.isLight) 0.36f else 0.58f))
+                    // The scrim is a dismiss gesture, not a control. Left in the tree it reads
+                    // as a giant unlabelled button covering the screen.
+                    .clearAndSetSemantics { }
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -109,6 +113,7 @@ private fun ExtractionPanel(
     onOpen: (ApkExtractor.Outcome.Success) -> Unit,
 ) {
     val colors = ManagerTheme.colors
+    val sheetGutter = ManagerTheme.space.sheetGutter
     val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     Column(
@@ -125,7 +130,7 @@ private fun ExtractionPanel(
             .clip(ManagerTheme.shapes.sheet)
             .background(colors.surface),
     ) {
-        Column(Modifier.padding(start = 26.dp, end = 26.dp, top = 28.dp)) {
+        Column(Modifier.padding(start = sheetGutter, end = sheetGutter, top = 28.dp)) {
             AnimatedContent(
                 targetState = state.finished,
                 transitionSpec = {
@@ -140,7 +145,7 @@ private fun ExtractionPanel(
 
         if (state.results.isNotEmpty() && state.finished) {
             Spacer(Modifier.height(20.dp))
-            Hairline(Modifier.padding(horizontal = 26.dp))
+            Hairline(Modifier.padding(horizontal = sheetGutter))
             Column(
                 Modifier
                     .heightIn(max = 300.dp)
@@ -257,7 +262,8 @@ private fun SuccessRow(
     onOpen: (ApkExtractor.Outcome.Success) -> Unit,
 ) {
     val colors = ManagerTheme.colors
-    Column(Modifier.padding(horizontal = 26.dp, vertical = 14.dp)) {
+    val sheetGutter = ManagerTheme.space.sheetGutter
+    Column(Modifier.padding(horizontal = sheetGutter, vertical = 14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ManagerIcon(
                 if (outcome.isArchive) ManagerIcons.Split else ManagerIcons.Package,
@@ -298,8 +304,9 @@ private fun SuccessRow(
 @Composable
 private fun FailureRow(outcome: ApkExtractor.Outcome.Failure) {
     val colors = ManagerTheme.colors
+    val sheetGutter = ManagerTheme.space.sheetGutter
     Row(
-        Modifier.padding(horizontal = 26.dp, vertical = 14.dp),
+        Modifier.padding(horizontal = sheetGutter, vertical = 14.dp),
         verticalAlignment = Alignment.Top,
     ) {
         ManagerIcon(ManagerIcons.Alert, null, tint = colors.ember, size = 15.dp)

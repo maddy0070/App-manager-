@@ -82,6 +82,8 @@ object Format {
     /** Compact form for dense metadata lines. */
     fun relativeShort(timestamp: Long, now: Long = System.currentTimeMillis()): String {
         if (timestamp <= 0) return "—"
+        // Clock skew and sideloaded packages can both be dated ahead of now.
+        if (timestamp > now) return "Just now"
         val days = daysBetween(timestamp, now)
         val minutes = TimeUnit.MILLISECONDS.toMinutes(abs(now - timestamp))
         return when {

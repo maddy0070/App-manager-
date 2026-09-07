@@ -86,7 +86,7 @@ private fun NoticeCard(notice: Notice, onDismiss: () -> Unit) {
     val accent = when (notice.tone) {
         NoticeTone.Neutral -> colors.onSurfaceInverse
         NoticeTone.Positive -> if (colors.isLight) colors.plot4 else colors.signal
-        NoticeTone.Warning -> colors.ember
+        NoticeTone.Warning -> colors.emberOnInverse
     }
     val glyph = when (notice.tone) {
         NoticeTone.Neutral -> ManagerIcons.Info

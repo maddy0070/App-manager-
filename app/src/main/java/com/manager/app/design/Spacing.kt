@@ -19,10 +19,12 @@ data class ManagerSpacing(
     val lg: Dp = 20.dp,
     val xl: Dp = 24.dp,
     val xxl: Dp = 32.dp,
-    val section: Dp = 40.dp,
-    val chapter: Dp = 56.dp,
+    /** Between sections. Deliberately larger than any padding inside one. */
+    val section: Dp = 32.dp,
     /** The one horizontal margin every screen shares. */
     val gutter: Dp = 22.dp,
+    /** The inside edge of every floating surface — detail, extraction, confirmation, settings. */
+    val sheetGutter: Dp = 24.dp,
 )
 
 val LocalManagerSpacing = staticCompositionLocalOf { ManagerSpacing() }

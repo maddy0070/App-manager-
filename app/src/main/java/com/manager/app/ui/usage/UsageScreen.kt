@@ -32,6 +32,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.manager.app.ManagerGraph
 import com.manager.app.data.AppEntry
@@ -227,8 +230,19 @@ private fun UsageRow(
         modifier = modifier
             .fillMaxWidth()
             .pressResponse(interaction, pressedScale = 0.985f)
-            .clickable(interactionSource = interaction, indication = null) { onOpen(bounds) }
-            .padding(horizontal = 10.dp, vertical = 12.dp),
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Button,
+                onClickLabel = "Open details",
+            ) { onOpen(bounds) }
+            .padding(horizontal = 10.dp, vertical = 12.dp)
+            .semantics {
+                contentDescription =
+                    "Number ${rank + 1}, ${entry.label}, ${Format.duration(foregroundMs)}, " +
+                        "${Format.percent(share)} of tracked time, last opened " +
+                        Format.relativeDay(lastUsed)
+            },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Txt(

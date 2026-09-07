@@ -184,6 +184,20 @@ fun AppsScreen(viewModel: ManagerViewModel, graph: ManagerGraph) {
                 when {
                     inventory.loading && !inventory.hasApps -> LoadingList(gutter, bottomInset)
 
+                    inventory.error != null && !inventory.hasApps -> Box(
+                        Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.TopCenter,
+                    ) {
+                        EmptyState(
+                            title = "The scan did not finish",
+                            body = inventory.error!!,
+                            icon = ManagerIcons.Alert,
+                            actionLabel = "Try again",
+                            onAction = viewModel::refresh,
+                            tone = ButtonTone.Signal,
+                        )
+                    }
+
                     apps.isEmpty() -> AppsEmptyState(
                         query = browse.query,
                         filter = browse.filter,

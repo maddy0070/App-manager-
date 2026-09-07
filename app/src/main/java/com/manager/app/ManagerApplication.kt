@@ -39,6 +39,9 @@ class ManagerApplication : Application() {
     }
 
     companion object {
+        // The graph holds the Application itself, which lives exactly as long as the process:
+        // there is nothing here to outlive and therefore nothing to leak.
+        @Suppress("StaticFieldLeak")
         private var graph: ManagerGraph? = null
 
         fun graph(): ManagerGraph = graph ?: error("ManagerApplication has not been created")

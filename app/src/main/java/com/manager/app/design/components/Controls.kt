@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -43,9 +44,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.manager.app.design.ManagerIcons
 import com.manager.app.design.ManagerTheme
@@ -106,6 +109,8 @@ fun ManagerChip(
                 role = Role.Tab,
                 onClick = onClick,
             )
+            // A role without a state leaves a screen reader saying "tab" and nothing else.
+            .semantics { this.selected = selected }
             // The label is small on purpose; the target never is.
             .defaultMinSize(minHeight = 44.dp)
             .padding(horizontal = 15.dp, vertical = 12.dp),
@@ -145,7 +150,9 @@ fun <T> SegmentedControl(
     val density = LocalDensity.current
     val index = options.indexOf(selected).coerceAtLeast(0)
     val segmentWidth = if (options.isEmpty()) 0.dp else with(density) { (trackWidth / options.size).toDp() }
-    val thumbOffset by animateDpAsState(
+    // Held as State and read inside the offset lambda: the thumb then animates in the layout
+    // phase, so sliding it does not recompose every label in the track on every frame.
+    val thumbOffset = animateDpAsState(
         targetValue = segmentWidth * index,
         animationSpec = spring(dampingRatio = 0.82f, stiffness = 420f),
         label = "segmentThumb",
@@ -161,7 +168,7 @@ fun <T> SegmentedControl(
         if (trackWidth > 0) {
             Box(
                 Modifier
-                    .offset(x = thumbOffset)
+                    .offset { IntOffset(thumbOffset.value.roundToPx(), 0) }
                     .width(segmentWidth)
                     .height(34.dp)
                     .clip(shape)
@@ -193,7 +200,8 @@ fun <T> SegmentedControl(
                             interactionSource = interaction,
                             indication = null,
                             role = Role.Tab,
-                        ) { onSelect(option) },
+                        ) { onSelect(option) }
+                        .semantics { this.selected = isSelected },
                     contentAlignment = Alignment.Center,
                 ) {
                     Txt(
@@ -280,7 +288,7 @@ fun ManagerSearchField(
         }
         Box(
             Modifier
-                .size(38.dp)
+                .size(44.dp)
                 .graphicsLayer {
                     scaleX = clearScale
                     scaleY = clearScale
@@ -293,7 +301,7 @@ fun ManagerSearchField(
                     icon = ManagerIcons.Close,
                     contentDescription = "Clear search",
                     onClick = { onQueryChange("") },
-                    size = 34.dp,
+                    size = 40.dp,
                     iconSize = 15.dp,
                     tint = colors.inkSecondary,
                     container = colors.canvasSunken,
@@ -379,7 +387,7 @@ fun ManagerSwitch(
         animationSpec = tween(200),
         label = "switchTrack",
     )
-    val offset by animateDpAsState(
+    val offset = animateDpAsState(
         targetValue = if (checked) 20.dp else 0.dp,
         animationSpec = spring(dampingRatio = 0.72f, stiffness = 700f),
         label = "switchThumb",
@@ -394,18 +402,21 @@ fun ManagerSwitch(
             .size(width = 48.dp, height = 28.dp)
             .clip(ManagerTheme.shapes.capsule)
             .background(track)
-            .clickable(
+            // Toggleable rather than clickable, so the state is announced and not just the role.
+            .toggleable(
+                value = checked,
                 interactionSource = interaction,
                 indication = null,
                 enabled = enabled,
                 role = Role.Switch,
-            ) { onCheckedChange(!checked) },
+                onValueChange = onCheckedChange,
+            ),
         contentAlignment = Alignment.CenterStart,
     ) {
         Box(
             Modifier
                 .padding(horizontal = 3.dp)
-                .offset(x = offset)
+                .offset { IntOffset(offset.value.roundToPx(), 0) }
                 .size(22.dp)
                 .graphicsLayer {
                     scaleX = stretch

@@ -16,6 +16,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,6 +37,8 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.manager.app.data.AppFilter
 import com.manager.app.data.SortDirection
@@ -200,7 +203,8 @@ private fun DirectionToggle(direction: SortDirection, onToggle: () -> Unit) {
             .clip(ManagerTheme.shapes.capsule)
             .background(colors.canvasSunken)
             .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onToggle)
-            .padding(horizontal = 11.dp, vertical = 6.dp),
+            .defaultMinSize(minHeight = 44.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
@@ -246,6 +250,7 @@ private fun SortOption(
                 role = Role.RadioButton,
                 onClick = onClick,
             )
+            .semantics { this.selected = selected }
             .padding(horizontal = 18.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

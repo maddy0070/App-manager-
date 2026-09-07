@@ -14,7 +14,11 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
-        resourceConfigurations += listOf("en")
+    }
+
+    androidResources {
+        // A personal, English-only build: shipping every AndroidX translation would be dead weight.
+        localeFilters += listOf("en")
     }
 
     signingConfigs {
@@ -85,14 +89,12 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.splashscreen)
     implementation(libs.androidx.datastore.preferences)
-    implementation(libs.androidx.graphics.shapes)
     implementation(libs.kotlinx.coroutines.android)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.foundation)
-    implementation(libs.androidx.material3)
     implementation(libs.androidx.ui.tooling.preview)
     debugImplementation(libs.androidx.ui.tooling)
 

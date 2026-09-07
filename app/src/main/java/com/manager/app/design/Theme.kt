@@ -1,9 +1,6 @@
 package com.manager.app.design
 
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material.ripple.RippleAlpha
-import androidx.compose.material3.LocalRippleConfiguration
-import androidx.compose.material3.RippleConfiguration
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
@@ -32,24 +29,17 @@ object ManagerTheme {
 val LocalContentColor = staticCompositionLocalOf { Color.Black }
 val LocalTextStyle = staticCompositionLocalOf { TextStyle(textDirection = TextDirection.Content) }
 
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+/**
+ * Every interactive surface here passes `indication = null` and supplies its own press response,
+ * so no ripple is ever drawn and none is configured. The trade is that focus indication is not
+ * provided either: this is a touch product, and a keyboard or switch user would get no focus ring.
+ */
 @Composable
 fun ManagerTheme(
     dark: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
     val colors = if (dark) DarkColors else LightColors
-    // Ripple exists only as an accessibility affordance for talkback/keyboard; every interactive
-    // surface in this product carries its own designed press response on top.
-    val ripple = RippleConfiguration(
-        color = colors.ink,
-        rippleAlpha = RippleAlpha(
-            draggedAlpha = 0.04f,
-            focusedAlpha = 0.06f,
-            hoveredAlpha = 0.03f,
-            pressedAlpha = 0.035f,
-        ),
-    )
     CompositionLocalProvider(
         LocalManagerColors provides colors,
         LocalManagerTypography provides ManagerTypography(),
@@ -58,7 +48,6 @@ fun ManagerTheme(
         LocalManagerMotion provides ManagerMotion(),
         LocalContentColor provides colors.ink,
         LocalTextStyle provides ManagerTypography().body,
-        LocalRippleConfiguration provides ripple,
         content = content,
     )
 }

@@ -70,6 +70,10 @@ import com.manager.app.util.Format
  * source, APK paths — is real and available, but folded away behind one disclosure so it never
  * competes with the four facts most people came for.
  */
+// The one Modifier here decorates the grab area, not the content root, so naming it `modifier`
+// would misdescribe it; an unused `modifier` parameter added to satisfy the convention would be
+// worse than the convention being broken.
+@Suppress("ModifierParameter")
 @Composable
 internal fun ColumnScope.DetailContent(
     entry: AppEntry,
@@ -162,7 +166,7 @@ internal fun ColumnScope.DetailContent(
             container = colors.canvasSunken,
             pressedContainer = colors.hairlineStrong,
             tint = colors.inkSecondary,
-            size = 40.dp,
+            size = 44.dp,
             iconSize = 16.dp,
         )
     }

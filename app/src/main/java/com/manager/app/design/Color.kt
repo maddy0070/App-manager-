@@ -35,6 +35,11 @@ data class ManagerColors(
     val ember: Color,
     val emberSoft: Color,
     val onEmber: Color,
+    /**
+     * Ember as it must appear on an inverse surface. The same hue at the lightness that surface
+     * demands — a destructive action nobody can read is worse than one that is slightly brighter.
+     */
+    val emberOnInverse: Color,
     val scrim: Color,
     val plot1: Color,
     val plot2: Color,
@@ -56,16 +61,17 @@ val LightColors = ManagerColors(
     hairlineStrong = Color(0xFFD5CFC2),
     ink = Color(0xFF1A1814),
     inkSecondary = Color(0xFF5E5950),
-    inkTertiary = Color(0xFF938D82),
+    inkTertiary = Color(0xFF726C64),
     inkDisabled = Color(0xFFB9B3A7),
     signal = Color(0xFF16453C),
     signalPressed = Color(0xFF0E332C),
     signalSoft = Color(0xFFE6EDE9),
     signalSoftStrong = Color(0xFFCFDDD6),
     onSignal = Color(0xFFF3F7F4),
-    ember = Color(0xFFC2451E),
-    emberSoft = Color(0xFFF9E9E2),
+    ember = Color(0xFFB84019),
+    emberSoft = Color(0xFFFBEEE8),
     onEmber = Color(0xFFFFF7F4),
+    emberOnInverse = Color(0xFFF09A72),
     scrim = Color(0xFF1A1814),
     plot1 = Color(0xFF16453C),
     plot2 = Color(0xFF356A5C),
@@ -101,12 +107,14 @@ val DarkColors = ManagerColors(
     ember = Color(0xFFE07A54),
     emberSoft = Color(0xFF3A211A),
     onEmber = Color(0xFF23100A),
+    // Dark mode's inverse surface is light, so this one goes the other way.
+    emberOnInverse = Color(0xFFB23C17),
     scrim = Color(0xFF000000),
     plot1 = Color(0xFF74C3A9),
     plot2 = Color(0xFF57A38C),
     plot3 = Color(0xFF41806D),
-    plot4 = Color(0xFF2E5D4F),
-    plot5 = Color(0xFF204238),
+    plot4 = Color(0xFF3A6E5F),
+    plot5 = Color(0xFF4C8574),
     isLight = false,
 )
 

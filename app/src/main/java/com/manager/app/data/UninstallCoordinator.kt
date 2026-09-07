@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
+import android.os.Build
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -78,7 +79,13 @@ class UninstallCoordinator(private val context: Context) {
 
     /** True when the package is genuinely gone — used to confirm after the system screen closes. */
     fun stillInstalled(packageName: String): Boolean = runCatching {
-        context.packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
+        val pm = context.packageManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pm.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            pm.getPackageInfo(packageName, 0)
+        }
         true
     }.getOrDefault(false)
 

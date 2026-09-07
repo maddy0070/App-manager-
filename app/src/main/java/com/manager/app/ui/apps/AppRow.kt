@@ -32,7 +32,10 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.manager.app.ManagerGraph
@@ -97,6 +100,13 @@ fun AppRow(
             .combinedClickable(
                 interactionSource = interaction,
                 indication = null,
+                role = Role.Button,
+                onClickLabel = when {
+                    !selectionMode -> "Open details"
+                    selected -> "Deselect"
+                    else -> "Select"
+                },
+                onLongClickLabel = if (selectionMode) null else "Select",
                 onLongClick = {
                     if (hapticsEnabled) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     if (selectionMode) onToggleSelect() else onBeginSelection()
@@ -111,9 +121,16 @@ fun AppRow(
                     append(entry.label)
                     append(", ")
                     append(if (entry.isSystem) "system app" else "user app")
+                    if (!entry.isEnabled) append(", disabled")
                     append(", ")
                     append(Format.bytes(entry.totalBytes))
-                    if (selectionMode) append(if (selected) ", selected" else ", not selected")
+                    if (entry.isSplit) append(", ${entry.splitCount + 1} APK parts")
+                }
+                // Selection is state, not part of the name. Announced this way it is also
+                // re-announced when it changes, which a name never is.
+                if (selectionMode) {
+                    this.selected = selected
+                    stateDescription = if (selected) "Selected" else "Not selected"
                 }
             },
         verticalAlignment = Alignment.CenterVertically,

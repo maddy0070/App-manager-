@@ -11,6 +11,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +34,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.manager.app.data.ThemeMode
 import com.manager.app.design.ManagerIcons
@@ -61,6 +67,7 @@ fun SettingsSurface(
     onDismiss: () -> Unit,
 ) {
     val colors = ManagerTheme.colors
+    val sheetGutter = ManagerTheme.space.sheetGutter
     val preferences by viewModel.preferences.collectAsState()
     val usageAccess by viewModel.usageAccess.collectAsState()
     val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -71,6 +78,9 @@ fun SettingsSurface(
                 Modifier
                     .fillMaxSize()
                     .background(colors.scrim.copy(alpha = if (colors.isLight) 0.34f else 0.56f))
+                    // The scrim is a dismiss gesture, not a control. Left in the tree it reads
+                    // as a giant unlabelled button covering the screen.
+                    .clearAndSetSemantics { }
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -106,7 +116,7 @@ fun SettingsSurface(
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(start = 26.dp, end = 14.dp, top = 24.dp, bottom = 18.dp),
+                        .padding(start = sheetGutter, end = 14.dp, top = 24.dp, bottom = 18.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     ManagerMark(size = 26.dp)
@@ -127,14 +137,14 @@ fun SettingsSurface(
                         container = colors.canvasSunken,
                         pressedContainer = colors.hairlineStrong,
                         tint = colors.inkSecondary,
-                        size = 40.dp,
+                        size = 44.dp,
                         iconSize = 16.dp,
                     )
                 }
 
                 Hairline()
 
-                Column(Modifier.padding(horizontal = 26.dp, vertical = 20.dp)) {
+                Column(Modifier.padding(horizontal = sheetGutter, vertical = 20.dp)) {
                     Txt("APPEARANCE", style = ManagerTheme.type.eyebrow, color = colors.inkTertiary)
                     Spacer(Modifier.height(14.dp))
                     SegmentedControl(
@@ -202,7 +212,13 @@ private fun ToggleRow(
             .fillMaxWidth()
             .pressResponse(interaction, pressedScale = 0.99f)
             .clip(ManagerTheme.shapes.sm)
-            .clickable(interactionSource = interaction, indication = null) { onChange(!checked) }
+            .toggleable(
+                value = checked,
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Switch,
+                onValueChange = onChange,
+            )
             .padding(vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -212,7 +228,11 @@ private fun ToggleRow(
             Txt(detail, style = ManagerTheme.type.metaS, color = colors.inkTertiary)
         }
         Spacer(Modifier.width(16.dp))
-        ManagerSwitch(checked = checked, onCheckedChange = onChange)
+        // The row is the control; the switch is its readout. Two targets for one setting means
+        // a screen reader announces the same toggle twice.
+        Box(Modifier.clearAndSetSemantics { }) {
+            ManagerSwitch(checked = checked, onCheckedChange = onChange)
+        }
     }
 }
 
@@ -226,8 +246,21 @@ private fun PermissionRow(granted: Boolean, onOpen: () -> Unit) {
             .pressResponse(interaction, pressedScale = 0.985f)
             .clip(ManagerTheme.shapes.sm)
             .background(if (granted) colors.signalSoft else colors.canvasSunken)
-            .clickable(interactionSource = interaction, indication = null, onClick = onOpen)
-            .padding(16.dp),
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Button,
+                onClickLabel = "Open Android settings",
+                onClick = onOpen,
+            )
+            .padding(16.dp)
+            .semantics {
+                contentDescription = if (granted) {
+                    "Usage access granted. Screen time and exact sizes are live."
+                } else {
+                    "Usage access off. Sizes fall back to APK size and usage is unavailable."
+                }
+            },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ManagerIcon(

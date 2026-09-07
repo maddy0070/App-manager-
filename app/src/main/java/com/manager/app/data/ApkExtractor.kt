@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -79,14 +80,14 @@ class ApkExtractor(private val context: Context) {
         val archive = readable.size > 1
         val name = fileName(entry, archive)
 
-        try {
-            val target = createTarget(name, archive)
-                ?: return@withContext Outcome.Failure(
-                    entry.packageName,
-                    entry.label,
-                    "Could not create a file in Downloads. Free storage may be low.",
-                )
+        val target = createTarget(name, archive)
+            ?: return@withContext Outcome.Failure(
+                entry.packageName,
+                entry.label,
+                "Could not create a file in Downloads. Free storage may be low.",
+            )
 
+        try {
             var written = 0L
             context.contentResolver.openOutputStream(target.uri)?.use { out ->
                 if (archive) {
@@ -113,11 +114,14 @@ class ApkExtractor(private val context: Context) {
                         }
                     }
                 }
-            } ?: return@withContext Outcome.Failure(
-                entry.packageName,
-                entry.label,
-                "Downloads could not be opened for writing.",
-            )
+            } ?: run {
+                target.discard()
+                return@withContext Outcome.Failure(
+                    entry.packageName,
+                    entry.label,
+                    "Downloads could not be opened for writing.",
+                )
+            }
 
             target.publish()
 
@@ -129,11 +133,19 @@ class ApkExtractor(private val context: Context) {
                 bytes = if (archive) target.size() else written,
                 partCount = readable.size,
             )
+        } catch (cancelled: CancellationException) {
+            // Cancelling a bulk extraction must not strand a pending, invisible, part-written
+            // file in Downloads for a week until Android sweeps it up.
+            target.discard()
+            throw cancelled
         } catch (io: FileNotFoundException) {
+            target.discard()
             Outcome.Failure(entry.packageName, entry.label, "The APK moved or was removed while Manager was copying it.")
         } catch (io: IOException) {
+            target.discard()
             Outcome.Failure(entry.packageName, entry.label, io.message?.takeIf { it.isNotBlank() }?.let { "Copy failed: $it" } ?: "The copy did not finish. Storage may be full.")
         } catch (se: SecurityException) {
+            target.discard()
             Outcome.Failure(entry.packageName, entry.label, "Android blocked access to this package's files.")
         }
     }
@@ -183,6 +195,8 @@ class ApkExtractor(private val context: Context) {
         val displayName: String,
         val publish: () -> Unit,
         val size: () -> Long,
+        /** Removes a half-written file so a cancelled copy leaves nothing behind. */
+        val discard: () -> Unit,
     )
 
     private fun createTarget(name: String, archive: Boolean): Target? {
@@ -210,6 +224,7 @@ class ApkExtractor(private val context: Context) {
                         resolver.openFileDescriptor(uri, "r")?.use { it.statSize }
                     }.getOrNull() ?: 0L
                 },
+                discard = { runCatching { resolver.delete(uri, null, null) } },
             )
         }
 
@@ -222,6 +237,7 @@ class ApkExtractor(private val context: Context) {
                 displayName = file.name,
                 publish = {},
                 size = { file.length() },
+                discard = { runCatching { file.delete() } },
             )
         }.getOrNull()
     }

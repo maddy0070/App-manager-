@@ -520,7 +520,7 @@ private fun SelectionCapsule(
                     Spacer(Modifier.width(12.dp))
                     CapsuleAction(ManagerIcons.Extract, "Extract", colors.onSurfaceInverse)
                     Spacer(Modifier.width(13.dp))
-                    CapsuleAction(ManagerIcons.Trash, "Remove", colors.ember)
+                    CapsuleAction(ManagerIcons.Trash, "Remove", colors.emberOnInverse)
                 }
             }
         }

@@ -2,8 +2,6 @@
 <resources>
     <!-- Mirrors design/Color.kt. Only the values the platform itself needs live here. -->
     <color name="signal">#FF16453C</color>
-    <color name="signal_deep">#FF0E332C</color>
     <color name="canvas">#FFF6F3EE</color>
-    <color name="ink">#FF1A1814</color>
     <color name="transparent">#00000000</color>
 </resources>

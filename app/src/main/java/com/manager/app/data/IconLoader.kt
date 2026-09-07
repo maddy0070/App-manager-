@@ -16,6 +16,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.createBitmap
 import com.manager.app.design.squirclePath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Semaphore
@@ -68,7 +69,7 @@ class IconLoader(context: Context) {
     }
 
     private fun renderAdaptive(drawable: AdaptiveIconDrawable): ImageBitmap {
-        val bitmap = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(SIZE, SIZE)
         val canvas = Canvas(bitmap)
 
         // Layers are authored on a 108 grid with the middle 72 visible: scale by 1.5 and centre.
@@ -98,7 +99,7 @@ class IconLoader(context: Context) {
                 return source.copy(Bitmap.Config.ARGB_8888, false).asImageBitmap()
             }
         }
-        val bitmap = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(SIZE, SIZE)
         val canvas = Canvas(bitmap)
         drawable.setBounds(0, 0, SIZE, SIZE)
         drawable.draw(canvas)

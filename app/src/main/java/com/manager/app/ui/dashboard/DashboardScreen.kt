@@ -33,6 +33,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -159,7 +162,7 @@ fun DashboardScreen(viewModel: ManagerViewModel, graph: ManagerGraph) {
 
             item(key = "hero") {
                 StaggeredEntrance(0) { InventoryHero(insights) }
-                Spacer(Modifier.height(ManagerTheme.space.xl))
+                Spacer(Modifier.height(ManagerTheme.space.section))
             }
 
             if (!usageAccess) {
@@ -167,7 +170,7 @@ fun DashboardScreen(viewModel: ManagerViewModel, graph: ManagerGraph) {
                     StaggeredEntrance(1) {
                         UsageAccessPanel(onGrant = viewModel::requestUsageAccess)
                     }
-                    Spacer(Modifier.height(ManagerTheme.space.xl))
+                    Spacer(Modifier.height(ManagerTheme.space.section))
                 }
             }
 
@@ -199,7 +202,7 @@ fun DashboardScreen(viewModel: ManagerViewModel, graph: ManagerGraph) {
                             }
                         }
                     }
-                    Spacer(Modifier.height(ManagerTheme.space.xl))
+                    Spacer(Modifier.height(ManagerTheme.space.section))
                 }
             }
 
@@ -213,7 +216,7 @@ fun DashboardScreen(viewModel: ManagerViewModel, graph: ManagerGraph) {
                         usageAccess = usageAccess,
                     )
                 }
-                Spacer(Modifier.height(ManagerTheme.space.xl))
+                Spacer(Modifier.height(ManagerTheme.space.section))
             }
 
             if (insights.recentlyInstalled.isNotEmpty()) {
@@ -237,10 +240,7 @@ fun DashboardScreen(viewModel: ManagerViewModel, graph: ManagerGraph) {
                 item(key = "recentRow") {
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(11.dp),
-                        contentPadding = PaddingValues(horizontal = 0.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 0.dp),
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
                         items(insights.recentlyInstalled, key = { it.packageName }) { entry ->
                             RecentTile(entry, graph) { bounds ->
@@ -248,13 +248,13 @@ fun DashboardScreen(viewModel: ManagerViewModel, graph: ManagerGraph) {
                             }
                         }
                     }
-                    Spacer(Modifier.height(ManagerTheme.space.xl))
+                    Spacer(Modifier.height(ManagerTheme.space.section))
                 }
             }
 
             item(key = "timeline") {
                 StaggeredEntrance(5) { InstallTimelinePanel(insights) }
-                Spacer(Modifier.height(ManagerTheme.space.xl))
+                Spacer(Modifier.height(ManagerTheme.space.section))
             }
 
             if (insights.largest.isNotEmpty()) {
@@ -284,7 +284,7 @@ fun DashboardScreen(viewModel: ManagerViewModel, graph: ManagerGraph) {
                             }
                         }
                     }
-                    Spacer(Modifier.height(ManagerTheme.space.xl))
+                    Spacer(Modifier.height(ManagerTheme.space.section))
                 }
             }
 
@@ -301,7 +301,7 @@ fun DashboardScreen(viewModel: ManagerViewModel, graph: ManagerGraph) {
                             },
                         )
                     }
-                    Spacer(Modifier.height(ManagerTheme.space.xl))
+                    Spacer(Modifier.height(ManagerTheme.space.section))
                 }
             }
 
@@ -471,8 +471,18 @@ private fun TopUsedRow(
         modifier = Modifier
             .fillMaxWidth()
             .pressResponse(interaction, pressedScale = 0.985f)
-            .clickable(interactionSource = interaction, indication = null) { onOpen(bounds) }
-            .padding(horizontal = 18.dp, vertical = 13.dp),
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Button,
+                onClickLabel = "Open details",
+            ) { onOpen(bounds) }
+            .padding(horizontal = 18.dp, vertical = 13.dp)
+            .semantics {
+                contentDescription =
+                    "${entry.label}, ranked ${rank + 1}, ${Format.duration(durationMs)}, " +
+                        "${Format.percent(share)} of tracked time"
+            },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Txt(
@@ -523,8 +533,16 @@ private fun LargestRow(
         modifier = Modifier
             .fillMaxWidth()
             .pressResponse(interaction, pressedScale = 0.985f)
-            .clickable(interactionSource = interaction, indication = null) { onOpen(bounds) }
-            .padding(horizontal = 18.dp, vertical = 13.dp),
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Button,
+                onClickLabel = "Open details",
+            ) { onOpen(bounds) }
+            .padding(horizontal = 18.dp, vertical = 13.dp)
+            .semantics {
+                contentDescription = "${entry.label}, ${Format.bytes(entry.totalBytes)}"
+            },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AppIcon(
@@ -568,7 +586,16 @@ private fun RecentTile(
         modifier = Modifier
             .width(124.dp)
             .pressResponse(interaction, pressedScale = 0.955f)
-            .clickable(interactionSource = interaction, indication = null) { onOpen(bounds) },
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Button,
+                onClickLabel = "Open details",
+            ) { onOpen(bounds) }
+            .semantics {
+                contentDescription =
+                    "${entry.label}, installed ${Format.relativeDay(entry.installedAt)}"
+            },
         shape = ManagerTheme.shapes.md,
     ) {
         Column(
@@ -778,8 +805,22 @@ private fun DormantRow(
         modifier = Modifier
             .fillMaxWidth()
             .pressResponse(interaction, pressedScale = 0.985f)
-            .clickable(interactionSource = interaction, indication = null) { onOpen(bounds) }
-            .padding(horizontal = 18.dp, vertical = 11.dp),
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Button,
+                onClickLabel = "Open details",
+            ) { onOpen(bounds) }
+            .padding(horizontal = 18.dp, vertical = 11.dp)
+            .semantics {
+                contentDescription = buildString {
+                    append(entry.label)
+                    append(", unopened for ")
+                    append(if (daysIdle == null) "as long as Android has recorded" else "$daysIdle days")
+                    append(", ")
+                    append(Format.bytes(entry.totalBytes))
+                }
+            },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AppIcon(
@@ -843,9 +884,9 @@ private fun ScanFooter(scannedAt: Long, total: Int, detailProgress: Float, measu
 private fun DashboardSkeleton() {
     Column {
         Skeleton(Modifier.fillMaxWidth().height(212.dp), ManagerTheme.shapes.lg)
-        Spacer(Modifier.height(ManagerTheme.space.xl))
+        Spacer(Modifier.height(ManagerTheme.space.section))
         Skeleton(Modifier.fillMaxWidth().height(150.dp), ManagerTheme.shapes.lg)
-        Spacer(Modifier.height(ManagerTheme.space.xl))
+        Spacer(Modifier.height(ManagerTheme.space.section))
         Skeleton(Modifier.fillMaxWidth().height(230.dp), ManagerTheme.shapes.lg)
     }
 }

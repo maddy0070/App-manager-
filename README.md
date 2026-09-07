@@ -14,7 +14,7 @@ and transition in the app is drawn by this codebase.
 ```bash
 ./gradlew assembleRelease      # app/build/outputs/apk/release/app-release.apk  (~3 MB)
 ./gradlew assembleDebug        # installs alongside release as com.manager.app.debug
-./gradlew test                 # 71 unit, composition and interaction tests, no device
+./gradlew test                 # 79 unit, composition and interaction tests, no device
 ```
 
 The release variant is signed with the checked-in `app/debug.keystore`. That is deliberate for a
@@ -75,8 +75,9 @@ Permissions: `QUERY_ALL_PACKAGES` (the product *is* the complete inventory),
 
 ## Design system
 
-Everything visual resolves through `ManagerTheme`. No screen reads a Material colour scheme or
-type role.
+Everything visual resolves through `ManagerTheme`. Material is not a dependency at all — not the
+colour scheme, not the type roles, not `Icon`, not the ripple — so there is no default to fall
+back to and no way for one to leak in.
 
 **Colour — "Bone & Evergreen"** (`design/Color.kt`). A warm paper neutral rather than clinical
 white, so surfaces read as printed matter. Deep evergreen is the only identity colour: selection,
@@ -128,9 +129,12 @@ would mean scanning the device twice and letting two screens disagree about what
 
 ## Tests
 
-`./gradlew test` runs 71 tests with no device attached:
+`./gradlew test` runs 79 tests with no device attached:
 
 - **Format** — every unit, duration and date string the user reads.
+- **Contrast** — the palette against WCAG, computed rather than eyeballed: every ink level on
+  every ground it is actually drawn on, the accents where they carry text, both inverse surfaces,
+  and the chart bands' separation from one another.
 - **Insights** — dashboard derivation, including the cases that produce wrong numbers quietly:
   never-updated apps, usage records for packages that are gone, freshly installed apps.
 - **Browsing** — search ranking, filter partitioning, sort stability.

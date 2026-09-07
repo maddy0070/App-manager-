@@ -8,9 +8,11 @@ import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Environment
 import android.os.Process
 import android.util.Log
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -104,8 +106,9 @@ class PackageRepository(
             addAction(Intent.ACTION_PACKAGE_REPLACED)
             addDataScheme("package")
         }
-        runCatching { context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED) }
-            .onSuccess { packageWatcher = receiver }
+        runCatching {
+            ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        }.onSuccess { packageWatcher = receiver }
     }
 
     fun stopObserving() {
@@ -114,10 +117,13 @@ class PackageRepository(
     }
 
     private suspend fun scanBaseInventory(): List<AppEntry> = withContext(Dispatchers.IO) {
-        val flags = PackageManager.GET_META_DATA.toLong()
-        val packages: List<PackageInfo> = runCatching {
-            pm.getInstalledPackages(PackageManager.PackageInfoFlags.of(flags))
-        }.getOrElse {
+        // Branch on the version rather than catching the failure: relying on NoSuchMethodError as
+        // control flow would run the whole enumeration twice on every scan below API 33.
+        // A failure here is left to throw: the caller turns it into the honest "Android would not
+        // hand over the package list" state, where swallowing it would read as an empty phone.
+        val packages: List<PackageInfo> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pm.getInstalledPackages(PackageManager.PackageInfoFlags.of(PackageManager.GET_META_DATA.toLong()))
+        } else {
             @Suppress("DEPRECATION")
             pm.getInstalledPackages(PackageManager.GET_META_DATA)
         }
@@ -166,7 +172,14 @@ class PackageRepository(
             targetSdk = app.targetSdkVersion,
             sourceDir = app.sourceDir,
             splitSourceDirs = splits,
-            installerPackage = runCatching { pm.getInstallSourceInfo(packageName).installingPackageName }.getOrNull(),
+            installerPackage = runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    pm.getInstallSourceInfo(packageName).installingPackageName
+                } else {
+                    @Suppress("DEPRECATION")
+                    pm.getInstallerPackageName(packageName)
+                }
+            }.getOrNull(),
             hasLaunchIntent = runCatching { pm.getLaunchIntentForPackage(packageName) != null }.getOrDefault(false),
             apkBytes = apkBytes,
         )
