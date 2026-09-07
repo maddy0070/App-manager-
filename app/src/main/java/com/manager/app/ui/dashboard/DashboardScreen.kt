@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -50,6 +51,7 @@ import com.manager.app.design.components.AppIcon
 import com.manager.app.design.components.ArcGauge
 import com.manager.app.design.components.ButtonTone
 import com.manager.app.design.components.CompositionBar
+import com.manager.app.design.components.CountingBytes
 import com.manager.app.design.components.LegendSwatch
 import com.manager.app.design.components.ManagerButton
 import com.manager.app.design.components.ManagerIcon
@@ -62,6 +64,7 @@ import com.manager.app.design.components.TimelineBars
 import com.manager.app.design.components.Txt
 import com.manager.app.design.components.VizSegment
 import com.manager.app.design.components.pressResponse
+import com.manager.app.domain.CacheReport
 import com.manager.app.domain.Insights
 import com.manager.app.ui.Destination
 import com.manager.app.ui.DetailRequest
@@ -91,6 +94,7 @@ fun DashboardScreen(viewModel: ManagerViewModel, graph: ManagerGraph) {
     val usage by viewModel.usage.collectAsState()
     val usageAccess by viewModel.usageAccess.collectAsState()
     val refreshing by viewModel.refreshing.collectAsState()
+    val cleanup by viewModel.cacheCleanup.collectAsState()
     val listState = rememberLazyListState()
 
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -217,6 +221,21 @@ fun DashboardScreen(viewModel: ManagerViewModel, graph: ManagerGraph) {
                     )
                 }
                 Spacer(Modifier.height(ManagerTheme.space.section))
+            }
+
+            if (insights.cache.isKnown || usageAccess) {
+                item(key = "cache") {
+                    StaggeredEntrance(4) {
+                        CachePanel(
+                            report = insights.cache,
+                            busy = cleanup != null,
+                            onClear = viewModel::requestCacheCleanup,
+                            onOpenAll = viewModel::openCache,
+                            graph = graph,
+                        )
+                    }
+                    Spacer(Modifier.height(ManagerTheme.space.section))
+                }
             }
 
             if (insights.recentlyInstalled.isNotEmpty()) {
@@ -697,6 +716,137 @@ private fun StoragePanel(
     }
 }
 
+/**
+ * Cache, and the only honest thing Manager can do about it.
+ *
+ * The figure is real — `StorageStatsManager`, per package, summed. The action is a hand-off:
+ * Android alone can delete another app's files, so the button opens the system screen that can and
+ * Manager measures again on the way back. Presenting a "Clean" button that quietly did nothing
+ * would be the single most dishonest thing this product could ship, so it does not exist.
+ *
+ * The panel is absent entirely when nothing was measured, rather than showing a hopeful zero.
+ */
+@Composable
+private fun CachePanel(
+    report: CacheReport,
+    busy: Boolean,
+    onClear: () -> Unit,
+    onOpenAll: () -> Unit,
+    graph: ManagerGraph,
+) {
+    val colors = ManagerTheme.colors
+
+    Column {
+        SectionHeader(
+            title = "App cache",
+            trailing = {
+                if (report.holders > report.largest.size) {
+                    ManagerTextAction("All ${report.holders}", onOpenAll)
+                }
+            },
+        )
+        Spacer(Modifier.height(14.dp))
+        Panel(Modifier.fillMaxWidth(), shape = ManagerTheme.shapes.lg) {
+            Column(Modifier.padding(24.dp)) {
+                if (!report.isKnown) {
+                    Txt(
+                        "Not measured yet",
+                        style = ManagerTheme.type.titleM,
+                        color = colors.ink,
+                    )
+                    Spacer(Modifier.height(7.dp))
+                    Txt(
+                        "Android reports cache sizes only to apps with usage access, and only once " +
+                            "the storage pass has run. Nothing here is guessed in the meantime.",
+                        style = ManagerTheme.type.bodyS,
+                        color = colors.inkSecondary,
+                    )
+                    return@Column
+                }
+
+                CountingBytes(
+                    bytes = report.bytes,
+                    valueStyle = ManagerTheme.type.displayM,
+                    unitStyle = ManagerTheme.type.titleM,
+                    valueColor = colors.ink,
+                    unitColor = colors.inkTertiary,
+                    gap = 6.dp,
+                    modifier = Modifier.clearAndSetSemantics {
+                        contentDescription = "${Format.bytes(report.bytes)} of app cache, " +
+                            "across ${Format.count(report.holders, "app")}"
+                    },
+                )
+                Spacer(Modifier.height(6.dp))
+                Txt(
+                    buildString {
+                        append("across ${Format.count(report.holders, "app")}")
+                        if (report.unmeasured > 0) append(" · ${report.unmeasured} would not report")
+                    },
+                    style = ManagerTheme.type.metaS,
+                    color = colors.inkTertiary,
+                )
+
+                if (report.largest.isNotEmpty()) {
+                    Spacer(Modifier.height(20.dp))
+                    val leader = report.largest.first().cacheBytes.coerceAtLeast(1L)
+                    report.largest.take(3).forEachIndexed { index, holder ->
+                        if (index > 0) Spacer(Modifier.height(13.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AppIcon(holder.entry.packageName, holder.entry.label, graph.icons, size = 26.dp)
+                            Spacer(Modifier.width(11.dp))
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Txt(
+                                        holder.entry.label,
+                                        style = ManagerTheme.type.meta,
+                                        color = colors.ink,
+                                        maxLines = 1,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Txt(
+                                        Format.bytes(holder.cacheBytes),
+                                        style = ManagerTheme.type.numericS,
+                                        color = colors.inkSecondary,
+                                        maxLines = 1,
+                                    )
+                                }
+                                Spacer(Modifier.height(5.dp))
+                                RankBar(
+                                    fraction = (holder.cacheBytes.toFloat() / leader).coerceIn(0f, 1f),
+                                    rank = index,
+                                    height = 4.dp,
+                                    color = colors.plot3,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (report.holders > 0) {
+                    Spacer(Modifier.height(22.dp))
+                    ActionRow {
+                        ManagerButton(
+                            label = if (busy) "Waiting for Android…" else "Clear cache",
+                            onClick = onClear,
+                            enabled = !busy,
+                            compact = true,
+                        )
+                        ManagerTextAction("Break it down", onOpenAll)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Txt(
+                        "Android does the clearing — Manager measures before and after and reports " +
+                            "what actually came back.",
+                        style = ManagerTheme.type.metaS,
+                        color = colors.inkTertiary,
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun InstallTimelinePanel(insights: Insights) {
     val colors = ManagerTheme.colors
@@ -746,11 +896,10 @@ private fun DormantPanel(
     onReviewAll: () -> Unit,
 ) {
     val colors = ManagerTheme.colors
-    val reclaimable = insights.dormant.sumOf { it.entry.totalBytes }
 
     Column {
         SectionHeader(
-            title = "Not opened in ${Insights.DORMANT_DAYS}+ days",
+            title = "Sitting idle",
             trailing = { ManagerTextAction("Review all", onReviewAll) },
         )
         Spacer(Modifier.height(14.dp))
@@ -762,19 +911,22 @@ private fun DormantPanel(
                         .padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    // The figure first and the sentence under it: "3.8 GB" is the fact, and
+                    // "tied up in twelve apps you have not opened in 45 days" is the reason it
+                    // is worth a second of anyone's attention.
                     Column(Modifier.weight(1f)) {
                         Txt(
-                            Format.bytes(reclaimable),
+                            Format.bytes(insights.dormantBytes),
                             style = ManagerTheme.type.displayS,
                             color = colors.ink,
                             maxLines = 1,
                         )
-                        Spacer(Modifier.height(3.dp))
+                        Spacer(Modifier.height(4.dp))
                         Txt(
-                            "across ${Format.count(insights.dormant.size, "app")}",
+                            "tied up in ${Format.count(insights.dormantCount, "app")} you haven't " +
+                                "opened in ${insights.dormantIdleDays} days",
                             style = ManagerTheme.type.metaS,
                             color = colors.inkTertiary,
-                            maxLines = 1,
                         )
                     }
                 }

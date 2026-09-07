@@ -56,6 +56,7 @@ fun StoryDetailSurface(
     stageHeight: Dp,
     chipWidth: Dp,
     chipCentre: androidx.compose.ui.geometry.Offset,
+    measure: StoryStaging.Measure,
     onReveal: (Float) -> Unit,
     onRevealSettled: (Float) -> Unit,
     onDismiss: () -> Unit,
@@ -143,7 +144,7 @@ fun StoryDetailSurface(
                         Column(Modifier.graphicsLayer { alpha = 1f - eased }) {
                             Txt(app.label, style = ManagerTheme.type.strong, color = colors.ink, maxLines = 1)
                             Txt(
-                                Format.bytes(app.totalBytes),
+                                app.reading(measure),
                                 style = ManagerTheme.type.numericS,
                                 color = colors.inkTertiary,
                                 maxLines = 1,

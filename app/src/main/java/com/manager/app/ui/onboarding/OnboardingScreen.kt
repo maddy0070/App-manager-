@@ -1,5 +1,6 @@
 package com.manager.app.ui.onboarding
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
@@ -14,6 +15,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -71,6 +74,7 @@ import com.manager.app.design.components.ReclaimBlock
 import com.manager.app.design.components.Txt
 import com.manager.app.design.components.VizSegment
 import com.manager.app.design.components.driftOffset
+import com.manager.app.util.Format
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -78,21 +82,24 @@ import kotlin.math.roundToInt
 /**
  * Onboarding as an object you are handed, rather than a tour you are taken on.
  *
- * There are no steps here and nothing to advance. The screen is a field of five apps drawn at the
- * size of what they weigh, and a bar along the bottom that always states the weight of whatever is
- * currently in play. Everything the product does is reachable from that one arrangement, in any
- * order, as many times as the user likes:
+ * One field of five apps, measured twice. Nothing is ever created or destroyed here — every beat
+ * is the same objects being re-measured, opened, or gathered, which is what makes the continuity
+ * structural rather than choreographed.
  *
- *  - touch an app and it *becomes* the detail surface, then drag that surface and the single figure
- *    it arrived with comes apart into app, data, cache and the rest of the record;
- *  - hold an app and it is selected, exactly as in the real list, and its weight lands in the bar;
- *  - select more and the figure accumulates, while the unchosen objects ease away from the ones
- *    that just gained mass;
- *  - remove the batch and the chosen objects collapse into a measured rail and then leave it,
- *    which is the same moment the real confirmation sheet shows.
+ *  - **Discover.** The field arrives unclaimed: five objects, no order, meaning nothing. One
+ *    invitation, one button.
+ *  - **Understand.** Explore measures the field by screen time — position is rank, width is hours,
+ *    the bar reads the total. Touch an app and it *becomes* the detail surface; drag that surface
+ *    and the single figure it arrived with comes apart into app, data and cache.
+ *  - **Interact.** Closing it re-measures the whole field by storage, and the order visibly
+ *    disagrees with itself: the app used most is nearly the smallest, and the one barely opened in
+ *    a fortnight is the largest thing here. That contradiction is the product's entire argument,
+ *    made by moving five objects rather than by drawing a chart.
+ *  - **Act.** Hold to select — the real gesture, with the real bar — and the weight accumulates.
+ *    Review gathers the batch into a single measured rail.
  *
- * Nothing instructs. The only line of copy that is not a label is the one at the very end, after
- * every claim it makes has already happened under the reader's own finger.
+ * Nothing instructs. Two short lines of copy exist: the invitation at the start, and the sentence
+ * at the end, which arrives after every claim in it has already happened under the reader's finger.
  *
  * Entirely self-contained: it runs on [StoryCast], so a fresh install with nothing granted and
  * nothing scanned tells the same story, deterministically.
@@ -103,7 +110,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
 
-    var phase by remember { mutableStateOf(Phase.Field) }
+    var phase by remember { mutableStateOf(Phase.Still) }
     var openedIndex by remember { mutableStateOf<Int?>(null) }
     var openedCentre by remember { mutableStateOf(Offset(0.5f, 0.3f)) }
     var selection by remember { mutableStateOf(emptySet<String>()) }
@@ -125,13 +132,21 @@ fun OnboardingScreen(onFinish: () -> Unit) {
     val exitEase = ManagerTheme.motion.exit
     val standardEase = ManagerTheme.motion.standardEase
 
-    val objects = remember { StoryCast.indices.map { ObjectState(StoryStaging.home(it)) } }
+    // Before Explore the field is present but unclaimed: visible enough to be intriguing, faint
+    // enough that it is plainly not yet saying anything.
+    val objects = remember {
+        StoryCast.indices.map { ObjectState(StoryStaging.home(it, StoryStaging.Measure.Loose), startAlpha = 0.4f) }
+    }
     val sizes = remember { mutableStateMapOf<Int, IntSize>() }
-    val inviteIndex = remember { StoryCast.indices.maxBy { StoryCast[it].totalBytes } }
+    val measure = phase.measure
+    // Whatever currently sits at the top of the field is the object worth inviting a touch to.
+    val inviteIndex = remember(measure) { StoryCast.indices.first { StoryStaging.rank(it, measure) == 0 } }
+    val handoff = remember { Animatable(0f) }
 
     val selectedApps = StoryCast.filter { it.id in selection }
     val ledgerBytes = if (selection.isEmpty()) StoryCast.sumOf { it.totalBytes } else selectedApps.sumOf { it.totalBytes }
     val ledgerCount = if (selection.isEmpty()) StoryCast.size else selectedApps.size
+    val fieldScreenTime = StoryCast.sumOf { it.screenTimeMs }
 
     // The field never stops breathing; each object traces its own slow path.
     val transition = rememberInfiniteTransition(label = "storyDrift")
@@ -162,7 +177,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
         // ---- Gestures. The real ones: hold to start selecting, tap to open or toggle. ----------
 
         val onTap by rememberUpdatedState<(Int) -> Unit> { index ->
-            if (phase != Phase.Field) return@rememberUpdatedState
+            if (!phase.isField) return@rememberUpdatedState
             touched = true
             val app = StoryCast[index]
             if (selection.isEmpty()) {
@@ -173,25 +188,47 @@ fun OnboardingScreen(onFinish: () -> Unit) {
             }
         }
         val onHold by rememberUpdatedState<(Int) -> Unit> { index ->
-            if (phase != Phase.Field) return@rememberUpdatedState
+            if (!phase.isField) return@rememberUpdatedState
             touched = true
             if (selection.isEmpty()) {
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                // Selecting is about weight, so a hold settles the field into the dimension the
+                // total is counted in. Anyone who reaches for selection first still gets there.
+                if (phase == Phase.Usage) phase = Phase.Storage
                 selection = setOf(StoryCast[index].id)
             }
         }
 
         // ---- The bar arrives a beat after the field, so the field is what is looked at first ---
 
-        LaunchedEffect(Unit) {
-            delay(560)
+        LaunchedEffect(phase) {
+            if (phase == Phase.Still) return@LaunchedEffect
+            delay(if (ledgerIn.value > 0f) 0 else 260)
             ledgerIn.animateTo(1f, spring(dampingRatio = 0.78f, stiffness = 300f))
+        }
+
+        /**
+         * The measure changed, so every object moves and resizes at once.
+         *
+         * This is the moment the whole screen exists for. Nothing is created or destroyed: the
+         * same five objects travel to their rank in the new dimension while their widths retune,
+         * and the app that was at the top of one list visibly falls to the bottom of the other.
+         */
+        LaunchedEffect(measure) {
+            if (measure == StoryStaging.Measure.Loose) return@LaunchedEffect
+            objects.forEachIndexed { index, state ->
+                launch {
+                    delay(StoryStaging.rank(index, measure) * 45L)
+                    state.centre.animateTo(StoryStaging.displaced(index, selection, measure), ReorderSpring)
+                }
+                launch { state.alpha.animateTo(1f, tween(360, easing = emphasized)) }
+            }
         }
 
         // ---- The invitation. Shown, never written. ----------------------------------------------
 
         val invitation = when {
-            phase != Phase.Field || openedIndex != null -> Invitation.None
+            !phase.isField || openedIndex != null -> Invitation.None
             !touched -> Invitation.Breathe
             closedOnce && selection.isEmpty() -> Invitation.Hold
             else -> Invitation.None
@@ -228,10 +265,10 @@ fun OnboardingScreen(onFinish: () -> Unit) {
         // ---- Selection displaces the field ------------------------------------------------------
 
         LaunchedEffect(selection, phase) {
-            if (phase != Phase.Field) return@LaunchedEffect
+            if (!phase.isField) return@LaunchedEffect
             objects.forEachIndexed { index, state ->
                 val chosen = StoryCast[index].id in selection
-                launch { state.centre.animateTo(StoryStaging.displaced(index, selection), DisplaceSpring) }
+                launch { state.centre.animateTo(StoryStaging.displaced(index, selection, measure), DisplaceSpring) }
                 if (openedIndex == null) {
                     launch { state.scale.animateTo(if (chosen) 1.045f else 1f, spring(dampingRatio = 0.62f, stiffness = 420f)) }
                 }
@@ -263,6 +300,9 @@ fun OnboardingScreen(onFinish: () -> Unit) {
             morph.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = 420f))
             openedIndex = null
             closedOnce = true
+            // Having just taken one object apart into app, data and cache, the field re-forms
+            // around the fact the user was shown. The transition is caused, not scheduled.
+            if (phase == Phase.Usage) phase = Phase.Storage
             objects.forEachIndexed { other, state ->
                 launch { state.alpha.animateTo(1f, tween(260)) }
                 launch {
@@ -275,7 +315,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
         // ---- Removal: the batch becomes a measurement, and then the measurement leaves ----------
 
         LaunchedEffect(phase) {
-            if (phase != Phase.Reclaim) return@LaunchedEffect
+            if (phase != Phase.Review) return@LaunchedEffect
             launch { stillness.animateTo(1f, tween(700, easing = emphasized)) }
             launch { ledgerIn.animateTo(0f, tween(180, easing = exitEase)) }
             launch { panelIn.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 300f)) }
@@ -311,12 +351,10 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                 }
             }
 
-            // The rail fills as they land, holds, and then empties. The gap it is left with is the
-            // space that comes back — the figure above it never had to change to say so.
+            // The rail fills as they land. Nothing then leaves it: this is a review, and nothing
+            // has been removed, so drawing a departure would be the one lie on the screen.
             delay(320)
             lift.animateTo(0f, tween(760, easing = emphasized))
-            delay(640)
-            lift.animateTo(1f, tween(980, easing = emphasized))
             phase = Phase.Done
         }
 
@@ -324,6 +362,21 @@ fun OnboardingScreen(onFinish: () -> Unit) {
         // changing it, so anything it tried to run after that line would be cancelled with it.
         LaunchedEffect(phase) {
             if (phase == Phase.Done) doneIn.animateTo(1f, spring(dampingRatio = 0.84f, stiffness = 260f))
+        }
+
+        /**
+         * The last frame of the demonstration is the first frame of the product.
+         *
+         * On the way out the review panel stretches to the full width of a list row and the whole
+         * stack rises, so what dissolves into the real app is already the shape of the app list
+         * rather than a card being replaced by a screen.
+         */
+        val leave: () -> Unit = {
+            scope.launch {
+                handoff.animateTo(1f, tween(380, easing = emphasized))
+                onFinish()
+            }
+            Unit
         }
 
         // ---- The field --------------------------------------------------------------------------
@@ -335,8 +388,9 @@ fun OnboardingScreen(onFinish: () -> Unit) {
             if (state.alpha.value < 0.02f) return@forEachIndexed
             val app = StoryCast[index]
             val selected = app.id in selection
-            val decorative = state.alpha.value < 0.35f
-            val width = stageWidth * StoryStaging.widthFraction(app)
+            // Unmeasured or dimmed objects are scenery: inert, and not read out.
+            val decorative = state.alpha.value < 0.35f || !phase.isField
+            val width = stageWidth * StoryStaging.widthFraction(app, measure)
             val measured = sizes[index]
             val pxWidth = measured?.width ?: with(density) { width.roundToPx() }
             val pxHeight = measured?.height ?: with(density) { 57.dp.roundToPx() }
@@ -380,7 +434,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                         },
                     ),
             ) {
-                StoryChip(app = app, selected = selected, width = width)
+                StoryChip(app = app, selected = selected, width = width, measure = measure)
             }
         }
 
@@ -397,11 +451,47 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                 StoryLedger(
                     count = ledgerCount,
                     bytes = ledgerBytes,
+                    durationMs = fieldScreenTime,
+                    measure = measure,
                     selecting = selection.isNotEmpty(),
-                    presence = ledgerIn.value * (1f - morph.value * 0.94f),
+                    presence = ledgerPresence,
                     onClear = { selection = emptySet() },
-                    onRemove = { if (selection.isNotEmpty()) phase = Phase.Reclaim },
+                    onRemove = { if (selection.isNotEmpty()) phase = Phase.Review },
                 )
+            }
+        }
+
+        // ---- What the field is currently ordered by ------------------------------------------------
+
+        // One word, pinned to the object at the top of the order, and it changes when the order
+        // does. It is the only label on the field, and it exists because "these are ranked" is the
+        // one thing position alone cannot say.
+        if (phase.isField && openedIndex == null) {
+            val topCentre = objects[inviteIndex].centre.value
+            val topHeight = sizes[inviteIndex]?.height ?: with(density) { 57.dp.roundToPx() }
+            val markerY = stageHeight.value * density.density * topCentre.y - topHeight / 2f
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .offset { IntOffset(0, (markerY - with(density) { 18.dp.toPx() }).roundToInt()) },
+                contentAlignment = Alignment.Center,
+            ) {
+                AnimatedContent(
+                    targetState = measure,
+                    transitionSpec = {
+                        (fadeIn(tween(320, delayMillis = 220)) + slideInVertically(
+                            tween(360, delayMillis = 220, easing = emphasized),
+                        ) { it / 2 }) togetherWith fadeOut(tween(160))
+                    },
+                    label = "fieldOrder",
+                ) { current ->
+                    Txt(
+                        if (current == StoryStaging.Measure.Usage) "MOST USED" else "LARGEST",
+                        style = ManagerTheme.type.eyebrow,
+                        color = colors.inkTertiary,
+                        maxLines = 1,
+                    )
+                }
             }
         }
 
@@ -427,8 +517,9 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                 reveal = reveal.value,
                 stageWidth = stageWidth,
                 stageHeight = stageHeight,
-                chipWidth = stageWidth * StoryStaging.widthFraction(opened),
+                chipWidth = stageWidth * StoryStaging.widthFraction(opened, measure),
                 chipCentre = openedCentre,
+                measure = measure,
                 onReveal = { value -> scope.launch { reveal.snapTo(value) } },
                 onRevealSettled = { target ->
                     scope.launch { reveal.animateTo(target, spring(dampingRatio = 0.86f, stiffness = 380f)) }
@@ -452,9 +543,12 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                             .fillMaxWidth()
                             .graphicsLayer {
                                 alpha = panelIn.value
-                                val s = 0.94f + 0.06f * panelIn.value
+                                val s = (0.94f + 0.06f * panelIn.value) * (1f + handoff.value * 0.04f)
                                 scaleX = s
                                 scaleY = s
+                                // On the way out the panel rises and squares off, so the last frame
+                                // of the demonstration already has the proportions of a list row.
+                                translationY = -handoff.value * 54.dp.toPx()
                             }
                             .shadow(
                                 elevation = 26.dp,
@@ -468,11 +562,13 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                             .padding(20.dp),
                     ) {
                         ReclaimBlock(
-                            caption = "COMES BACK",
+                            caption = "SELECTED",
                             bytes = selectedApps.sumOf { it.totalBytes },
                             blocks = selectedApps.map { VizSegment(it.label, it.totalBytes, plotTint(it.tint)) },
                             lift = lift.value,
                             departs = true,
+                            note = "Removing these would give that space back. Nothing here is real, " +
+                                "and nothing has been touched.",
                         )
                     }
                     // Reserved from the moment the panel appears, so nothing shifts when the way
@@ -481,7 +577,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                         if (doneIn.value > 0.01f) {
                             ManagerButton(
                                 "Open Manager",
-                                onFinish,
+                                leave,
                                 fillWidth = true,
                                 modifier = Modifier.graphicsLayer {
                                     alpha = doneIn.value
@@ -523,6 +619,33 @@ fun OnboardingScreen(onFinish: () -> Unit) {
 
             Spacer(Modifier.weight(1f))
 
+            // An unmeasured field, and an invitation to measure it. This is the only screen state
+            // that asks for anything, and it asks once.
+            AnimatedVisibility(
+                visible = phase == Phase.Still,
+                enter = fadeIn(tween(420, delayMillis = 260, easing = emphasized)) + slideInVertically(
+                    tween(520, delayMillis = 260, easing = emphasized),
+                ) { it / 5 },
+                exit = fadeOut(tween(200)) + slideOutVertically(tween(300, easing = exitEase)) { -it / 6 },
+            ) {
+                Column {
+                    Txt("Your phone\nhas a story.", style = ManagerTheme.type.displayXl, color = colors.ink)
+                    Spacer(Modifier.height(14.dp))
+                    Txt(
+                        "Let's uncover it.",
+                        style = ManagerTheme.type.body,
+                        color = colors.inkSecondary,
+                    )
+                    Spacer(Modifier.height(24.dp))
+                    ManagerButton(
+                        "Explore",
+                        { phase = Phase.Usage },
+                        icon = ManagerIcons.ArrowUpRight,
+                    )
+                    Spacer(Modifier.height(26.dp))
+                }
+            }
+
             // The only sentence in the whole screen, and it arrives after every claim in it has
             // already happened under the reader's own finger.
             AnimatedVisibility(
@@ -546,25 +669,50 @@ fun OnboardingScreen(onFinish: () -> Unit) {
             }
 
             // The height the bottom slot occupies, so the sentence above never lands under it.
-            Spacer(Modifier.height(if (phase == Phase.Field) 84.dp else 244.dp))
+            Spacer(Modifier.height(if (phase.isField) 84.dp else if (phase == Phase.Still) 40.dp else 244.dp))
         }
     }
 }
 
-private enum class Phase { Field, Reclaim, Done }
+/**
+ * Discover, understand, interact, act.
+ *
+ * [Still] is a field that has not been measured — objects present, meaning nothing. [Usage] and
+ * [Storage] are the same five objects measured against facts that disagree, and moving between
+ * them is the product's whole argument made physically. [Review] is the batch gathered and
+ * weighed; [Done] flattens it into the shape of the list the user is about to meet.
+ */
+private enum class Phase { Still, Usage, Storage, Review, Done }
+
+private val Phase.measure: StoryStaging.Measure
+    get() = when (this) {
+        Phase.Still -> StoryStaging.Measure.Loose
+        Phase.Usage -> StoryStaging.Measure.Usage
+        else -> StoryStaging.Measure.Storage
+    }
+
+/** The field is live — touchable, selectable, re-orderable — in exactly these two phases. */
+private val Phase.isField: Boolean get() = this == Phase.Usage || this == Phase.Storage
 
 private enum class Invitation { None, Breathe, Hold }
 
 /** One object's live position in fraction space, plus how present it currently is. */
-private class ObjectState(start: Offset) {
+private class ObjectState(start: Offset, startAlpha: Float = 1f) {
     val centre = Animatable(start, Offset.VectorConverter)
-    val alpha = Animatable(1f)
+    val alpha = Animatable(startAlpha)
     val scale = Animatable(1f)
 }
 
 private val DisplaceSpring = spring<Offset>(
     dampingRatio = 0.72f,
     stiffness = 260f,
+    visibilityThreshold = Offset(0.0004f, 0.0004f),
+)
+
+/** The re-measure. Slow and heavy on purpose: five objects changing places must be followable. */
+private val ReorderSpring = spring<Offset>(
+    dampingRatio = 0.84f,
+    stiffness = 130f,
     visibilityThreshold = Offset(0.0004f, 0.0004f),
 )
 
@@ -578,15 +726,18 @@ private val ConvergeSpring = spring<Offset>(
  * The bar, which is the real selection bar wearing the demonstration's data.
  *
  * Idle it weighs the field; selecting, it weighs the selection — same capsule, same inverse
- * surface, same travelling figure, same glyph buttons. It offers only Remove, because Remove is
- * the one action the demonstration can honestly carry through: extraction copies real files to
- * real Downloads, and a button here that pretended to do that would be the one dishonest thing on
- * the screen. The full bar is one tap away.
+ * surface, same travelling figure, same glyph buttons. It offers one action, and that action
+ * reviews rather than removes: nothing on this screen is real, so nothing is destroyed, and the
+ * glyph opens the same kind of weighed confirmation the real trash button does. Extraction is
+ * absent because it copies real files to real Downloads, and a button here that pretended to do
+ * that would be the one dishonest thing on the screen. The full bar is one tap away.
  */
 @Composable
 private fun StoryLedger(
     count: Int,
     bytes: Long,
+    durationMs: Long,
+    measure: StoryStaging.Measure,
     selecting: Boolean,
     presence: Float,
     onClear: () -> Unit,
@@ -626,14 +777,26 @@ private fun StoryLedger(
                 maxLines = 1,
             )
             Spacer(Modifier.height(1.dp))
-            CountingBytes(
-                bytes = bytes,
-                valueStyle = ManagerTheme.type.titleM,
-                unitStyle = ManagerTheme.type.metaS,
-                valueColor = colors.onSurfaceInverse,
-                unitColor = colors.onSurfaceInverse.copy(alpha = 0.62f),
-                gap = 3.dp,
-            )
+            // Whatever the field is currently measured by, the bar reads the same thing. Time
+            // does not travel between values the way bytes do — the total only changes when the
+            // selection does, and there is no selecting in the usage dimension.
+            if (measure == StoryStaging.Measure.Usage) {
+                Txt(
+                    Format.duration(durationMs),
+                    style = ManagerTheme.type.titleM,
+                    color = colors.onSurfaceInverse,
+                    maxLines = 1,
+                )
+            } else {
+                CountingBytes(
+                    bytes = bytes,
+                    valueStyle = ManagerTheme.type.titleM,
+                    unitStyle = ManagerTheme.type.metaS,
+                    valueColor = colors.onSurfaceInverse,
+                    unitColor = colors.onSurfaceInverse.copy(alpha = 0.62f),
+                    gap = 3.dp,
+                )
+            }
         }
         if (selecting) {
             Box(
@@ -643,7 +806,7 @@ private fun StoryLedger(
                     .background(colors.onSurfaceInverse.copy(alpha = 0.18f)),
             )
             Spacer(Modifier.width(1.dp))
-            InverseGlyphButton(ManagerIcons.Trash, "Remove", onRemove, colors.emberOnInverse)
+            InverseGlyphButton(ManagerIcons.Trash, "Review selection", onRemove, colors.emberOnInverse)
         }
     }
 }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ApplicationProvider
@@ -36,6 +37,7 @@ import com.manager.app.ui.apps.AppRow
 import com.manager.app.ui.common.NavigationRail
 import com.manager.app.ui.common.SelectionBar
 import com.manager.app.ui.detail.AppDetailSurface
+import com.manager.app.ui.overlays.CacheSurface
 import com.manager.app.ui.overlays.UninstallConfirmSurface
 import com.manager.app.ui.settings.SettingsSurface
 import org.junit.Rule
@@ -117,9 +119,10 @@ class ScreenRenderTest {
     }
 
     @Test
-    fun `onboarding opens on the field, on sample data, with a way out`() {
+    fun `onboarding opens on an unclaimed field, on sample data, with a way out`() {
         compose.setContent { ManagerTheme { AppRoot(viewModel, graph) } }
-        compose.onNodeWithContentDescription("Radio, 2.4 GB").assertIsDisplayed()
+        compose.onNodeWithText("Your phone\nhas a story.").assertIsDisplayed()
+        compose.onNodeWithText("Explore").assertIsDisplayed()
         compose.onNodeWithText("Sample data").assertIsDisplayed()
         compose.onNodeWithText("Skip").assertIsDisplayed()
     }
@@ -249,6 +252,7 @@ class ScreenRenderTest {
                         count = 3,
                         bytes = 5_175_453_286L,
                         measured = true,
+                        breakdown = emptyList(),
                         allSelected = false,
                         canExtract = true,
                         canUninstall = true,
@@ -272,11 +276,17 @@ class ScreenRenderTest {
                 androidx.compose.foundation.layout.Column {
                     SelectionBar(
                         count = 3, bytes = 5_175_453_286L, measured = true, allSelected = false,
+                        breakdown = listOf(
+                            VizSegment("App", 1_100_000_000L, ManagerTheme.colors.plot1),
+                            VizSegment("Data", 3_200_000_000L, ManagerTheme.colors.plot3),
+                            VizSegment("Cache", 875_453_286L, ManagerTheme.colors.plot5),
+                        ),
                         canExtract = true, canUninstall = true,
                         onSelectAll = {}, onExtract = {}, onUninstall = {}, onDismiss = {},
                     )
                     SelectionBar(
                         count = 1, bytes = 88_080_384L, measured = false, allSelected = true,
+                        breakdown = emptyList(),
                         canExtract = true, canUninstall = false,
                         onSelectAll = {}, onExtract = {}, onUninstall = {}, onDismiss = {},
                     )
@@ -285,10 +295,55 @@ class ScreenRenderTest {
         }
         // The count and the figure are one reading, so a screen reader hears the decision rather
         // than three unrelated fragments — and the estimate says so in words, not just a glyph.
-        compose.onNodeWithContentDescription("3 apps selected, 4.8 GB").assertIsDisplayed()
+        compose.onNodeWithContentDescription("3 apps selected, 4.8 GB", substring = true).assertIsDisplayed()
         compose.onNodeWithContentDescription(
             "1 app selected, about 84 MB, measured from APK size on disk",
+            substring = true,
         ).assertIsDisplayed()
+    }
+
+    @Test
+    fun `the cache surface renders, and says why it has nothing to show`() {
+        compose.setContent {
+            ManagerTheme {
+                CacheSurface(visible = true, viewModel = viewModel, graph = graph, onDismiss = {})
+            }
+        }
+        // No usage access in the test environment, which is exactly the state that most needs an
+        // honest explanation rather than a hopeful zero.
+        compose.onNodeWithText("Cache needs usage access").assertIsDisplayed()
+        compose.onNodeWithContentDescription("0 B of app cache").assertIsDisplayed()
+    }
+
+    @Test
+    fun `the cache surface renders in dark mode too`() {
+        compose.setContent {
+            ManagerTheme(dark = true) {
+                CacheSurface(visible = true, viewModel = viewModel, graph = graph, onDismiss = {})
+            }
+        }
+        compose.waitForIdle()
+    }
+
+    @Test
+    fun `the confirmation states what Android removes, in order, and what it could not measure`() {
+        compose.setContent {
+            ManagerTheme {
+                UninstallConfirmSurface(
+                    entries = listOf(entry("a", "Alpha")),
+                    graph = graph,
+                    onConfirm = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        compose.onNodeWithText("ANDROID REMOVES").assertIsDisplayed()
+        compose.onNodeWithText("Cache").assertIsDisplayed()
+        compose.onNodeWithText("App data").assertIsDisplayed()
+        compose.onNodeWithText("Application").assertIsDisplayed()
+        // This entry has no StorageStats record, so two of the three stages are unknown — and the
+        // sheet has to say unknown rather than show a confident zero.
+        compose.onAllNodesWithText("Not measured")[0].assertIsDisplayed()
     }
 
     @Test

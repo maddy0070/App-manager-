@@ -16,12 +16,19 @@ import com.manager.app.data.SortKey
 import com.manager.app.data.ThemeMode
 import com.manager.app.data.UninstallCoordinator
 import com.manager.app.data.UsageSnapshot
+import com.manager.app.data.SystemRoutes
 import com.manager.app.data.UsageWindow
+import com.manager.app.domain.CacheOrder
+import com.manager.app.domain.CacheReport
 import com.manager.app.domain.Insights
+import com.manager.app.domain.ReclaimOutcome
+import com.manager.app.domain.reclaimOutcome
 import com.manager.app.domain.applyFilter
 import com.manager.app.domain.applySearch
 import com.manager.app.domain.applySort
+import com.manager.app.domain.buildCacheReport
 import com.manager.app.domain.buildInsights
+import com.manager.app.util.Format
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -30,10 +37,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** A transient message. Never a system Toast — the product draws its own. */
 @Immutable
@@ -83,10 +92,31 @@ data class UninstallState(
  * must come back to us: the uninstall queue can only advance once its screen closes, and usage
  * access must be re-checked the moment the user returns from Settings.
  */
-enum class ActivityRequestKind { Uninstall, UsageSettings, General }
+enum class ActivityRequestKind { Uninstall, UsageSettings, CacheCleanup, General }
 
+/**
+ * Candidates in descending order of directness. OEM builds differ in which system screens they
+ * expose, so the activity tries each in turn and only reports failure when none resolve.
+ */
 @Immutable
-data class ActivityRequest(val kind: ActivityRequestKind, val intent: Intent)
+data class ActivityRequest(val kind: ActivityRequestKind, val intents: List<Intent>) {
+    constructor(kind: ActivityRequestKind, intent: Intent) : this(kind, listOf(intent))
+}
+
+/**
+ * A cache cleanup in flight.
+ *
+ * Manager cannot clear another app's cache, so what it does instead is bracket the system flow:
+ * the measured total before, and the measured total after. [baseline] is that "before" — without
+ * it the return from Settings would be a shrug, and with it Manager can state exactly what came
+ * back rather than congratulating the user on nothing.
+ */
+@Immutable
+data class CacheCleanup(
+    val baseline: Long,
+    val scope: String,
+    val awaitingRescan: Boolean = false,
+)
 
 /** Where the user is. Deliberately flat — this product has no deep hierarchy. */
 enum class Destination(val title: String) { Dashboard("Overview"), Apps("Apps"), Usage("Usage") }
@@ -139,6 +169,15 @@ class ManagerViewModel(private val graph: ManagerGraph) : ViewModel() {
 
     private val _settingsOpen = MutableStateFlow(false)
     val settingsOpen: StateFlow<Boolean> = _settingsOpen.asStateFlow()
+
+    private val _cacheOpen = MutableStateFlow(false)
+    val cacheOpen: StateFlow<Boolean> = _cacheOpen.asStateFlow()
+
+    private val _cacheOrder = MutableStateFlow(CacheOrder.Largest)
+    val cacheOrder: StateFlow<CacheOrder> = _cacheOrder.asStateFlow()
+
+    private val _cacheCleanup = MutableStateFlow<CacheCleanup?>(null)
+    val cacheCleanup: StateFlow<CacheCleanup?> = _cacheCleanup.asStateFlow()
 
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
@@ -216,6 +255,97 @@ class ManagerViewModel(private val graph: ManagerGraph) : ViewModel() {
 
     fun openSettings() { _settingsOpen.value = true }
     fun closeSettings() { _settingsOpen.value = false }
+
+    // ---- Cache ------------------------------------------------------------------------------
+
+    /** The cache report, rebuilt from the inventory rather than read off the dashboard's flow. */
+    val cacheReport: StateFlow<CacheReport> = combine(inventory, _usage) { state, usage ->
+        buildCacheReport(state.apps, usage)
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CacheReport.Empty)
+
+    fun openCache() { _cacheOpen.value = true }
+    fun closeCache() { _cacheOpen.value = false }
+    fun setCacheOrder(order: CacheOrder) { _cacheOrder.value = order }
+
+    /**
+     * Hands the privileged half to Android and keeps the accounting.
+     *
+     * Manager measures what is there, opens the system screen that can act on it, and — on the way
+     * back — measures again. Everything it then says about what happened is a difference between
+     * two of its own measurements, never an assumption that the user pressed the button.
+     */
+    fun requestCacheCleanup() {
+        if (_cacheCleanup.value != null) return
+        _cacheCleanup.value = CacheCleanup(baseline = cacheReport.value.bytes, scope = "device")
+        activityRequests.trySend(ActivityRequest(ActivityRequestKind.CacheCleanup, SystemRoutes.clearCache()))
+    }
+
+    fun requestAppStorage(entry: AppEntry) {
+        if (_cacheCleanup.value != null) return
+        _cacheCleanup.value = CacheCleanup(
+            baseline = entry.storage?.cacheBytes ?: 0L,
+            scope = entry.label,
+        )
+        activityRequests.trySend(
+            ActivityRequest(ActivityRequestKind.CacheCleanup, SystemRoutes.appStorage(entry.packageName)),
+        )
+    }
+
+    /**
+     * Back from the system screen. The user may have cleared everything, some of it, or nothing at
+     * all — Android does not say, and the result code is meaningless here. So Manager rescans and
+     * reports the measured difference, including when that difference is zero.
+     */
+    /** No system screen opened, so no return is coming. Clear the pending measurement. */
+    fun abandonCacheCleanup() { _cacheCleanup.value = null }
+
+    fun onReturnFromCacheCleanup() {
+        val pending = _cacheCleanup.value ?: return
+        _cacheCleanup.value = pending.copy(awaitingRescan = true)
+        graph.packages.refresh(force = true)
+        viewModelScope.launch {
+            // The storage pass streams in after the first paint; wait for it to finish rather than
+            // comparing against a half-measured device. The ceiling keeps a stalled scan from
+            // leaving the notice hanging forever.
+            val settled = withTimeoutOrNull(CACHE_RESCAN_TIMEOUT_MS) {
+                inventory.first { !it.loading && it.detailProgress >= 1f && it.hasApps }
+            }
+            _cacheCleanup.value = null
+            if (settled == null) {
+                notify(Notice(nextId(), "Rescan did not finish", "Pull down to measure again.", NoticeTone.Neutral))
+                return@launch
+            }
+            val after = buildCacheReport(settled.apps, _usage.value).bytes
+            val freed = pending.baseline - after
+            notify(cacheOutcome(pending, freed))
+        }
+    }
+
+    private fun cacheOutcome(pending: CacheCleanup, freed: Long): Notice = when (
+        reclaimOutcome(pending.baseline, pending.baseline - freed, MEANINGFUL_RECLAIM)
+    ) {
+        ReclaimOutcome.Freed -> Notice(
+            nextId(),
+            "${Format.bytes(freed)} came back",
+            if (pending.scope == "device") "Measured across every app Android would report." else "From ${pending.scope}.",
+            NoticeTone.Positive,
+        )
+
+        ReclaimOutcome.Grew -> Notice(
+            nextId(),
+            "Cache grew by ${Format.bytes(-freed)}",
+            "Apps rebuild their caches as they run. Nothing was lost.",
+            NoticeTone.Neutral,
+        )
+
+        ReclaimOutcome.Unchanged -> Notice(
+            nextId(),
+            "Nothing was cleared",
+            "The measurement is unchanged, so Android did not free anything this time.",
+            NoticeTone.Neutral,
+        )
+    }
 
     // ---- Detail surface ---------------------------------------------------------------------
 
@@ -302,9 +432,9 @@ class ManagerViewModel(private val graph: ManagerGraph) : ViewModel() {
     }
 
     fun requestUsageAccess() {
-        graph.permissions.usageAccessIntents().firstOrNull()?.let {
-            activityRequests.trySend(ActivityRequest(ActivityRequestKind.UsageSettings, it))
-        }
+        activityRequests.trySend(
+            ActivityRequest(ActivityRequestKind.UsageSettings, graph.permissions.usageAccessIntents()),
+        )
     }
 
     fun onReturnFromSettings() {
@@ -527,6 +657,12 @@ class ManagerViewModel(private val graph: ManagerGraph) : ViewModel() {
     }
 
     fun nextId(): Long = ++noticeSeed
+
+    private companion object {
+        /** Below this, a change is apps rewriting their own caches, not the user's doing. */
+        const val MEANINGFUL_RECLAIM = 1024L * 1024L
+        const val CACHE_RESCAN_TIMEOUT_MS = 25_000L
+    }
 
     class Factory(private val graph: ManagerGraph) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")

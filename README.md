@@ -14,7 +14,7 @@ and transition in the app is drawn by this codebase.
 ```bash
 ./gradlew assembleRelease      # app/build/outputs/apk/release/app-release.apk  (~3 MB)
 ./gradlew assembleDebug        # installs alongside release as com.manager.app.debug
-./gradlew test                 # 82 unit, composition and interaction tests, no device
+./gradlew test                 # 103 unit, composition and interaction tests, no device
 ```
 
 The release variant is signed with the checked-in `app/debug.keystore`. That is deliberate for a
@@ -27,19 +27,26 @@ sideloaded personal build: the key is stable, so updates install over one anothe
 
 ## What it does
 
-**Onboarding** — an object you are handed, not a tour you are taken on. There are no steps and
-nothing to advance: one field of five apps, each drawn at the width of what it weighs, and a bar
-along the bottom that always states the weight of whatever is in play. Touch an app and it
-*becomes* the detail surface; drag that surface and the single figure it arrived with comes apart
-into app, data and cache; hold one and it is selected exactly as in the real list, and its weight
-lands in the bar; remove the batch and the chosen objects collapse into a measured rail and then
-leave it. Nothing instructs — the one sentence on the screen arrives at the end, after everything
-it claims has already happened under the reader's own finger. Runs entirely on sample data, so it
+**Onboarding** — one field of five apps, measured twice. It opens unclaimed: five objects, no
+order, all the same size, and one invitation. *Explore* measures them by screen time — position is
+rank, width is hours, the bar reads the total. Touch an app and it *becomes* the detail surface;
+drag that surface and the single figure it arrived with comes apart into app, data and cache.
+Closing it re-measures the whole field by storage, and the order visibly contradicts itself: the
+app used most is nearly the smallest, and the one barely opened in a fortnight is the largest thing
+there. Hold to select — the real gesture, the real bar — and the weight accumulates; review gathers
+the batch into a single measured rail. Nothing instructs. Runs entirely on sample data, so it
 behaves identically on a fresh install with nothing scanned and nothing granted. Skippable.
 
 **Overview** — a device summary: how many apps and the user/system split, storage broken down by
-origin, your five most-used apps, what arrived recently, a twelve-month install timeline, the
-largest apps, and anything untouched for three weeks or more.
+origin, your five most-used apps, app cache with its largest holders, what arrived recently, a
+twelve-month install timeline, the largest apps, and how much is tied up in things you have not
+opened in weeks.
+
+**Cache** — every app holding one, ranked by size, by how much of the app it *is*, or by how long
+since you last opened it. Manager measures it precisely and hands the clearing to Android, which is
+the only thing that can do it; on the way back it measures again and tells you what actually came
+back. Coverage is stated rather than assumed — apps Android declines to measure are counted
+separately and never folded into the total.
 
 **Apps** — the full inventory. Search by name or package, seven filters, five sort keys in both
 directions. Long-press to enter selection mode; the navigation bar becomes an action bar carrying
@@ -75,6 +82,13 @@ Permissions: `QUERY_ALL_PACKAGES` (the product *is* the complete inventory),
 `PACKAGE_USAGE_STATS` (user-granted; powers usage analytics and real storage figures),
 `REQUEST_DELETE_PACKAGES`. Nothing leaves the device.
 
+**What Manager cannot do, and does not pretend to.** No normal Android app can delete another
+app's cache or data. `deleteApplicationCacheFiles` is a system API; `freeStorageAndNotify` has
+needed a signature-or-privileged permission since API 26. A sideloaded consumer install holds
+neither. So Manager does everything on either side of that step instead — measure precisely, rank
+usefully, open the exact system screen that can act, and measure again on the way back — and the
+UI says which half is Android's. There is no button here that quietly does nothing.
+
 ---
 
 ## Design system
@@ -106,7 +120,10 @@ caused, eased tweens for anything the system caused. Nothing in the app animates
 - The action bar answers "how much is this?" before you have asked: the count is trivia, the
   weight is the decision, and it accumulates rather than being redrawn.
 - The uninstall confirmation leads with what comes back, drawn as the batch itself — one rail,
-  one block per app, sized against each other.
+  one block per app, sized against each other — then states what Android removes, in order, with
+  the real figures where it reported them and "not measured" where it did not.
+- Cache cleanup is bracketed rather than claimed: measured before, handed to Android, measured
+  after, and reported as the difference — including when the difference is nothing.
 - Pull-to-refresh assembles the app's mark tile by tile as you pull.
 - The navigation bar and the selection action bar share one capsule and one slot.
 - Selection inverts the whole row rather than adding a checkbox to a gap.
@@ -137,7 +154,7 @@ would mean scanning the device twice and letting two screens disagree about what
 
 ## Tests
 
-`./gradlew test` runs 82 tests with no device attached:
+`./gradlew test` runs 103 tests with no device attached:
 
 - **Format** — every unit, duration and date string the user reads.
 - **Contrast** — the palette against WCAG, computed rather than eyeballed: every ink level on
@@ -148,12 +165,17 @@ would mean scanning the device twice and letting two screens disagree about what
 - **Browsing** — search ranking, filter partitioning, sort stability.
 - **Squircle** — the shape system at the sizes real layouts produce: tiny chips, extreme aspect
   ratios, radii larger than the box, zero sizes.
+- **Storage** — every figure the product states about size: cache aggregation and its coverage,
+  the three cache orderings, selection totals as apps go in and out, select-all, what happens to a
+  total when one app in it was never measured, dormant bytes across the whole device rather than
+  the visible slice, and what a re-measurement after the system screen is allowed to claim.
 - **ScreenRender** — Robolectric renders the real Compose tree for every screen, both themes, plus
   each visualisation at its degenerate inputs and app names long enough to break a layout.
-- **StoryFlow** — plays the onboarding with real gestures: measures the objects against each
-  other to prove width really is weight, opens one, drags its figure apart, throws it back, holds
-  to select, watches the total accumulate and release, removes the batch, and checks there is a
-  working way out. It also asserts that nothing on the screen instructs. Runs on a small phone too.
+- **StoryFlow** — plays the onboarding with real gestures: explores the field, measures the
+  objects against each other to prove width really is the datum, opens one, drags its figure apart,
+  checks the two dimensions genuinely disagree, holds to select, watches the total accumulate and
+  release, and reviews the batch. It also asserts that nothing on the screen instructs, and that no
+  two objects can ever overlap. Runs on a small phone too.
 
 Both render suites run at the target device's size with native graphics. Robolectric's defaults
 are a 320x470 mdpi screen with stubbed text measurement that lays every string out one character

@@ -95,7 +95,10 @@ class InsightsTest {
         )
         val unmeasured = entry("b", apkBytes = 5_000_000)
         val insights = buildInsights(listOf(measured, unmeasured), UsageSnapshot.Empty, false, now)
-        assertEquals(42_000_000L + 5_000_000L, insights.userBytes)
+        // App plus data plus cache: all three are space the app is occupying, and all three come
+        // back when it goes. The APK figure is only ever the fallback for a package Android
+        // declined to measure.
+        assertEquals(43_000_000L + 5_000_000L, insights.userBytes)
         assertTrue(insights.storageIsMeasured)
     }
 

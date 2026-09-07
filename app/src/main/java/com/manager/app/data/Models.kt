@@ -2,14 +2,23 @@ package com.manager.app.data
 
 import androidx.compose.runtime.Immutable
 
-/** What Android could actually tell us about a package's storage. Absent fields stay absent. */
+/**
+ * What Android could actually tell us about a package's storage. Absent fields stay absent.
+ *
+ * [dataBytes] here excludes cache, because `StorageStats.getDataBytes()` includes it and the three
+ * figures are drawn side by side — counting cache inside data as well as on its own would show an
+ * app as larger than it is. [total] then has to add all three back: cache is space the app is
+ * occupying right now and space that comes back when it goes, so an app's size includes it. The
+ * detail sheet sums its own segments, so if this ever drops a component the list and the sheet
+ * start quoting different sizes for the same app.
+ */
 @Immutable
 data class StorageBreakdown(
     val appBytes: Long,
     val dataBytes: Long,
     val cacheBytes: Long,
 ) {
-    val total: Long get() = appBytes + dataBytes
+    val total: Long get() = appBytes + dataBytes + cacheBytes
 }
 
 @Immutable

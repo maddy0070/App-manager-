@@ -166,16 +166,17 @@ fun UninstallConfirmSurface(
                         )
                     }
 
-                    Spacer(Modifier.height(18.dp))
-                    Txt(
-                        if (removable.size == 1) {
-                            "Android will ask you to confirm this uninstall on its own screen. App data goes with it."
-                        } else {
-                            "Android confirms each uninstall on its own screen, so expect ${removable.size} prompts. " +
-                                "App data goes with each one."
-                        },
-                        style = ManagerTheme.type.bodyS,
-                        color = colors.inkSecondary,
+                    // What is about to happen, in the order it happens, with the real figures where
+                    // Android reported them. Manager performs none of these steps — the uninstall
+                    // takes the app's own files with it, which is why there is no pre-clean here
+                    // pretending to have done something first.
+                    Spacer(Modifier.height(24.dp))
+                    RemovalStages(
+                        cacheBytes = removable.mapNotNull { it.storage?.cacheBytes }.takeIf { it.isNotEmpty() }?.sum(),
+                        dataBytes = removable.mapNotNull { it.storage?.dataBytes }.takeIf { it.isNotEmpty() }?.sum(),
+                        appBytes = removable.mapNotNull { it.storage?.appBytes }.takeIf { it.isNotEmpty() }
+                            ?.sum() ?: removable.sumOf { it.apkBytes },
+                        prompts = removable.size,
                     )
                     if (blocked > 0) {
                         Spacer(Modifier.height(12.dp))
@@ -251,6 +252,92 @@ fun UninstallConfirmSurface(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * The removal, in the order Android performs it.
+ *
+ * Every one of these steps is Android's, not Manager's. A normal app cannot delete another app's
+ * cache or data — so rather than staging a fake "clearing cache…" progress bar and then letting
+ * the uninstall do the work anyway, this simply states what the single system operation actually
+ * takes with it, and how many confirmations to expect. The figures are shown only where
+ * StorageStats reported them; a stage with no number is a stage Android would not measure.
+ */
+@Composable
+private fun RemovalStages(
+    cacheBytes: Long?,
+    dataBytes: Long?,
+    appBytes: Long,
+    prompts: Int,
+) {
+    val colors = ManagerTheme.colors
+    val stages = listOf(
+        Triple("Cache", cacheBytes, "Temporary files the app rebuilt as it ran"),
+        Triple("App data", dataBytes, "Accounts, settings and downloads inside the app"),
+        Triple("Application", appBytes, "The installed package itself"),
+    )
+
+    Column(Modifier.fillMaxWidth()) {
+        Txt("ANDROID REMOVES", style = ManagerTheme.type.eyebrow, color = colors.inkTertiary)
+        Spacer(Modifier.height(14.dp))
+        stages.forEachIndexed { index, (label, bytes, detail) ->
+            if (index > 0) Spacer(Modifier.height(14.dp))
+            Row(verticalAlignment = Alignment.Top) {
+                // A numeral rather than a bullet: the order is the information.
+                Box(
+                    Modifier
+                        .size(20.dp)
+                        .clip(ManagerTheme.shapes.capsule)
+                        .background(colors.canvasSunken),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Txt(
+                        "${index + 1}",
+                        style = ManagerTheme.type.metaS,
+                        color = colors.inkSecondary,
+                        maxLines = 1,
+                    )
+                }
+                Spacer(Modifier.width(13.dp))
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Txt(
+                            label,
+                            style = ManagerTheme.type.labelS,
+                            color = colors.ink,
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Txt(
+                            // "Not measured" rather than a zero: absence is not emptiness.
+                            bytes?.let { Format.bytes(it) } ?: "Not measured",
+                            style = ManagerTheme.type.numericS,
+                            color = if (bytes == null) colors.inkTertiary else colors.inkSecondary,
+                            maxLines = 1,
+                        )
+                    }
+                    Spacer(Modifier.height(3.dp))
+                    Txt(detail, style = ManagerTheme.type.metaS, color = colors.inkTertiary)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Row(verticalAlignment = Alignment.Top) {
+            ManagerIcon(ManagerIcons.Info, null, tint = colors.inkTertiary, size = 13.dp)
+            Spacer(Modifier.width(8.dp))
+            Txt(
+                if (prompts == 1) {
+                    "Android shows its own confirmation before anything is removed."
+                } else {
+                    "Android confirms each one on its own screen, so expect $prompts prompts."
+                },
+                style = ManagerTheme.type.metaS,
+                color = colors.inkTertiary,
+            )
         }
     }
 }

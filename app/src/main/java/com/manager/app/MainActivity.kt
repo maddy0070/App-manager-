@@ -43,6 +43,14 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.StartActivityForResult(),
     ) { viewModelRef?.onReturnFromSettings() }
 
+    /**
+     * The system storage screens. Their result code says nothing about whether anything was
+     * cleared — Android does not report that — so the return simply triggers a re-measure.
+     */
+    private val cacheLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { viewModelRef?.onReturnFromCacheCleanup() }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -136,24 +144,38 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Tries each candidate in order and stops at the first that opens.
+     *
+     * System screens are not uniform across OEM builds — a device may have no direct cache dialog,
+     * or no per-app details page reachable by that action. Falling through the list is what turns
+     * "this vendor removed that screen" from a dead end into a slightly less direct route.
+     */
     private fun dispatch(request: ActivityRequest) {
-        runCatching {
-            when (request.kind) {
-                ActivityRequestKind.UsageSettings -> settingsLauncher.launch(request.intent)
-                // The confirmation must return here so the uninstall queue can advance.
-                ActivityRequestKind.Uninstall -> uninstallLauncher.launch(request.intent)
-                ActivityRequestKind.General -> startActivity(request.intent)
-            }
-        }.onFailure {
-            viewModelRef?.notify(
-                com.manager.app.ui.Notice(
-                    id = System.nanoTime(),
-                    title = "Nothing could handle that",
-                    body = "No app on this device responded to the request.",
-                    tone = com.manager.app.ui.NoticeTone.Warning,
-                ),
-            )
+        val opened = request.intents.any { intent ->
+            runCatching {
+                when (request.kind) {
+                    ActivityRequestKind.UsageSettings -> settingsLauncher.launch(intent)
+                    // The confirmation must return here so the uninstall queue can advance.
+                    ActivityRequestKind.Uninstall -> uninstallLauncher.launch(intent)
+                    // Returns so the cache can be re-measured and the real difference reported.
+                    ActivityRequestKind.CacheCleanup -> cacheLauncher.launch(intent)
+                    ActivityRequestKind.General -> startActivity(intent)
+                }
+            }.isSuccess
         }
+        if (opened) return
+
+        // Nothing resolved. Anything waiting on a return will never get one, so release it.
+        if (request.kind == ActivityRequestKind.CacheCleanup) viewModelRef?.abandonCacheCleanup()
+        viewModelRef?.notify(
+            com.manager.app.ui.Notice(
+                id = System.nanoTime(),
+                title = "Nothing could handle that",
+                body = "No screen on this device responded to the request.",
+                tone = com.manager.app.ui.NoticeTone.Warning,
+            ),
+        )
     }
 
     private companion object {

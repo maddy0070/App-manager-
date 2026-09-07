@@ -46,6 +46,7 @@ fun StoryChip(
     app: StoryApp,
     selected: Boolean,
     width: Dp,
+    measure: StoryStaging.Measure,
     modifier: Modifier = Modifier,
 ) {
     val colors = ManagerTheme.colors
@@ -77,7 +78,7 @@ fun StoryChip(
             .border(if (selected) 1.5.dp else 1.dp, outline, shape)
             .padding(horizontal = 13.dp, vertical = 11.dp)
             .semantics {
-                contentDescription = "${app.label}, ${Format.bytes(app.totalBytes)}"
+                contentDescription = "${app.label}, ${app.reading(measure)}"
                 stateDescription = if (selected) "Selected" else "Not selected"
             },
         verticalAlignment = Alignment.CenterVertically,
@@ -86,8 +87,10 @@ fun StoryChip(
         Spacer(Modifier.width(11.dp))
         Column {
             Txt(app.label, style = ManagerTheme.type.strong, color = colors.ink, maxLines = 1)
+            // The second line is whichever fact the field is currently measured by, so the
+            // object always states the number its own width is drawn from.
             Txt(
-                Format.bytes(app.totalBytes),
+                app.reading(measure),
                 style = ManagerTheme.type.numericS,
                 color = colors.inkTertiary,
                 maxLines = 1,
@@ -130,6 +133,12 @@ fun StoryTile(
         }
         if (selected) SelectionMark(selected = true, size = size)
     }
+}
+
+/** What this object reads as in the dimension the field is currently measured in. */
+internal fun StoryApp.reading(measure: StoryStaging.Measure): String = when (measure) {
+    StoryStaging.Measure.Usage -> Format.duration(screenTimeMs)
+    else -> Format.bytes(totalBytes)
 }
 
 internal fun lerpDp(from: Dp, to: Dp, t: Float): Dp = from + (to - from) * t.coerceIn(0f, 1f)

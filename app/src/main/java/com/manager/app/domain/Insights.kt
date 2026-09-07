@@ -22,6 +22,43 @@ data class DormantApp(
     val daysIdle: Int?,
 )
 
+/**
+ * What Android was willing to say about cache, and how much of the device it actually covers.
+ *
+ * [unmeasured] is the honest half of this: `StorageStatsManager` refuses some packages even with
+ * usage access granted, so a total that quietly summed only the answers it got would understate
+ * the device without ever saying so. Every figure here is paired with its own coverage.
+ */
+@Immutable
+data class CacheReport(
+    val bytes: Long,
+    /** Apps carrying a cache Android reported as larger than zero. */
+    val holders: Int,
+    /** Apps whose cache Android reported — including the ones reporting zero. */
+    val measured: Int,
+    /** Apps Android would not measure at all. Their cache is unknown, not absent. */
+    val unmeasured: Int,
+    val largest: List<CacheHolder>,
+) {
+    val isKnown: Boolean get() = measured > 0
+    val isComplete: Boolean get() = measured > 0 && unmeasured == 0
+
+    companion object {
+        val Empty = CacheReport(0, 0, 0, 0, emptyList())
+    }
+}
+
+@Immutable
+data class CacheHolder(
+    val entry: AppEntry,
+    val cacheBytes: Long,
+    val lastUsed: Long?,
+) {
+    /** Cache as a fraction of everything the app occupies — how much of it is disposable. */
+    val shareOfApp: Float
+        get() = entry.totalBytes.takeIf { it > 0 }?.let { cacheBytes.toFloat() / it } ?: 0f
+}
+
 @Immutable
 data class TimelineBucket(val label: String, val count: Int, val isCurrent: Boolean)
 
@@ -51,11 +88,25 @@ data class Insights(
     val recentlyUpdated: List<AppEntry>,
     val largest: List<AppEntry>,
     val topUsed: List<UsageRank>,
+    /** The worst offenders, capped for display. [dormantCount] is how many there really are. */
     val dormant: List<DormantApp>,
+    val dormantCount: Int,
+    /** What all of them are holding — not just the ones shown. */
+    val dormantBytes: Long,
+    val dormantIdleDays: Int,
+    val cache: CacheReport,
     val usageTotalMs: Long,
     val timeline: List<TimelineBucket>,
 ) {
     val userShare: Float get() = if (total == 0) 0f else userCount.toFloat() / total
+
+    /**
+     * Space Manager can point at without guessing: cache Android reported, plus everything held by
+     * apps the user has not opened in three weeks. Deliberately not called "junk" — the dormant
+     * half is only reclaimable if the user agrees it is, which is why it is never acted on
+     * automatically.
+     */
+    val reclaimable: Long get() = cache.bytes + dormantBytes
 
     companion object {
         val Empty = Insights(
@@ -64,6 +115,7 @@ data class Insights(
             updatedLastWeek = 0, totalBytes = 0, userBytes = 0, systemBytes = 0,
             storageIsMeasured = false, recentlyInstalled = emptyList(), recentlyUpdated = emptyList(),
             largest = emptyList(), topUsed = emptyList(), dormant = emptyList(),
+            dormantCount = 0, dormantBytes = 0, dormantIdleDays = 0, cache = CacheReport.Empty,
             usageTotalMs = 0, timeline = emptyList(),
         )
 
@@ -155,7 +207,6 @@ fun buildInsights(
             }
         }
         .sortedWith(compareByDescending<DormantApp> { it.daysIdle ?: Int.MAX_VALUE }.thenByDescending { it.entry.totalBytes })
-        .take(8)
         .toList()
 
     return Insights(
@@ -176,9 +227,69 @@ fun buildInsights(
         recentlyUpdated = recentlyUpdated,
         largest = largest,
         topUsed = topUsed,
-        dormant = dormant,
+        dormant = dormant.take(8),
+        dormantCount = dormant.size,
+        dormantBytes = dormant.sumOf { it.entry.totalBytes },
+        // The dormancy the headline claims is the shortest one every listed app actually clears,
+        // so "untouched for N days" is true of all of them rather than only the worst.
+        dormantIdleDays = dormant.minOfOrNull { it.daysIdle ?: Int.MAX_VALUE }
+            ?.takeIf { it != Int.MAX_VALUE } ?: Insights.DORMANT_DAYS,
+        cache = buildCacheReport(apps, usage),
         usageTotalMs = usageTotal,
         timeline = buildTimeline(apps, now),
+    )
+}
+
+/**
+ * Cache, counted only where Android answered.
+ *
+ * `StorageStatsManager` needs usage access and still declines some packages, so an app with no
+ * storage record has an *unknown* cache rather than an empty one. Those are counted separately and
+ * never folded into the total — the difference between "37 apps hold 842 MB" and "37 apps hold at
+ * least 842 MB, and 12 more would not say" is the whole reason to trust the figure.
+ */
+fun buildCacheReport(apps: List<AppEntry>, usage: UsageSnapshot): CacheReport {
+    var bytes = 0L
+    var holders = 0
+    var measured = 0
+    var unmeasured = 0
+    val candidates = ArrayList<CacheHolder>()
+
+    apps.forEach { app ->
+        val cache = app.storage?.cacheBytes
+        if (cache == null) {
+            unmeasured++
+            return@forEach
+        }
+        measured++
+        if (cache <= 0) return@forEach
+        holders++
+        bytes += cache
+        candidates.add(CacheHolder(app, cache, usage.lastUsedByPackage[app.packageName]))
+    }
+
+    return CacheReport(
+        bytes = bytes,
+        holders = holders,
+        measured = measured,
+        unmeasured = unmeasured,
+        largest = candidates.sortedByDescending { it.cacheBytes }.take(6),
+    )
+}
+
+/** How the focused cache view is ordered. Each answers a different question about the same list. */
+enum class CacheOrder(val label: String) {
+    Largest("Largest"),
+    ShareOfApp("Most of the app"),
+    LeastUsed("Least used"),
+}
+
+fun List<CacheHolder>.applyCacheOrder(order: CacheOrder): List<CacheHolder> = when (order) {
+    CacheOrder.Largest -> sortedByDescending { it.cacheBytes }
+    CacheOrder.ShareOfApp -> sortedByDescending { it.shareOfApp }
+    // Never-opened first, then longest-ago. A null last-used is the strongest signal there is.
+    CacheOrder.LeastUsed -> sortedWith(
+        compareBy<CacheHolder> { it.lastUsed ?: Long.MIN_VALUE }.thenByDescending { it.cacheBytes },
     )
 }
 
@@ -211,5 +322,65 @@ private fun buildTimeline(apps: List<AppEntry>, now: Long): List<TimelineBucket>
 
     return buckets.mapIndexed { index, count ->
         TimelineBucket(labels[index] ?: "", count, index == 11)
+    }
+}
+
+/**
+ * What a selection adds up to.
+ *
+ * Pulled out of the UI because it is arithmetic with rules, not layout: the total is only a
+ * *measurement* when Android measured every app in it, and the breakdown only exists at all in
+ * that case. A composition drawn from one app's real figures and another's absence would be a
+ * shape made partly of missing data, which is worse than no shape.
+ */
+@Immutable
+data class SelectionTotals(
+    val count: Int,
+    val bytes: Long,
+    val measured: Boolean,
+    val appBytes: Long,
+    val dataBytes: Long,
+    val cacheBytes: Long,
+) {
+    val hasBreakdown: Boolean get() = measured && (appBytes + dataBytes + cacheBytes) > 0
+
+    companion object {
+        val Empty = SelectionTotals(0, 0, false, 0, 0, 0)
+    }
+}
+
+fun List<AppEntry>.selectionTotals(): SelectionTotals {
+    if (isEmpty()) return SelectionTotals.Empty
+    val measured = all { it.storage != null }
+    return SelectionTotals(
+        count = size,
+        bytes = sumOf { it.totalBytes },
+        measured = measured,
+        appBytes = if (measured) sumOf { it.storage!!.appBytes } else 0L,
+        dataBytes = if (measured) sumOf { it.storage!!.dataBytes } else 0L,
+        cacheBytes = if (measured) sumOf { it.storage!!.cacheBytes } else 0L,
+    )
+}
+
+/**
+ * What a re-measurement after the system flow actually shows.
+ *
+ * Android never reports whether the user cleared anything, so this is the only evidence there is:
+ * the difference between two of Manager's own measurements. It is deliberately three-valued —
+ * "nothing changed" is a real, common and honest answer, and a product that only knows how to
+ * congratulate would report it as success.
+ */
+enum class ReclaimOutcome { Freed, Grew, Unchanged }
+
+/**
+ * @param noiseFloor below which a change is apps rewriting their own caches while Settings was
+ * open, not anything the user did.
+ */
+fun reclaimOutcome(before: Long, after: Long, noiseFloor: Long): ReclaimOutcome {
+    val freed = before - after
+    return when {
+        freed >= noiseFloor -> ReclaimOutcome.Freed
+        freed <= -noiseFloor -> ReclaimOutcome.Grew
+        else -> ReclaimOutcome.Unchanged
     }
 }

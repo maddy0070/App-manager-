@@ -6,12 +6,12 @@
 |---|---|
 | Package | `com.manager.app` |
 | Version | 1.0 (versionCode 1) |
-| Size | 3125648 bytes (2.98 MiB) |
+| Size | 3158416 bytes (3.01 MiB) |
 | minSdk / targetSdk | 29 / 36 |
 | ABIs | arm64-v8a, armeabi-v7a, x86, x86_64 |
 | Signature | v2 scheme, `CN=Manager Debug, O=Personal, C=US` |
 | Signing cert SHA-256 | `21aae7670ce4f7c81a519415566a07df021c0f612151cab9b52c0a5b45101d42` |
-| APK SHA-256 | `61bc56225f5e82b114598271fac4a9d463778547f4a1d124ec0a931254be4b4e` |
+| APK SHA-256 | `a4e949f310af89b64a4f42820cb38a4d02474398e939671bca007571d4e481ea` |
 
 ## Installing on a Pixel
 
@@ -28,15 +28,15 @@ Verify the download first if you like:
 
 ```bash
 sha256sum Manager-release.apk
-# 61bc56225f5e82b114598271fac4a9d463778547f4a1d124ec0a931254be4b4e
+# a4e949f310af89b64a4f42820cb38a4d02474398e939671bca007571d4e481ea
 ```
 
 ## After installing
 
-Onboarding is a field of five sample apps drawn at the width of what they weigh, with a bar that
-states the weight of whatever is in play. Touch one to open it, drag the surface to take its figure
-apart, hold to select, remove the batch and watch the measurement leave. It asks for nothing and
-touches none of your real apps.
+Onboarding is one field of five sample apps, measured twice. Press Explore and they arrange
+themselves by screen time; touch one to open it and drag the surface to take its figure apart;
+closing it re-measures the whole field by storage, and the order contradicts itself. Hold to
+select, then review the batch. It asks for nothing and touches none of your real apps.
 
 **Usage access** is explained where it matters instead: the dashboard carries a panel saying what
 it unlocks (screen-time ranking and exact app sizes) with a link to the Settings page, and the
@@ -45,6 +45,11 @@ size on disk and says so in place.
 
 `QUERY_ALL_PACKAGES` and `REQUEST_DELETE_PACKAGES` are granted at install time. Every uninstall
 still goes through Android's own confirmation screen.
+
+**Cache.** With usage access granted, the overview gains an app-cache figure and its largest
+holders, and "Break it down" opens the full ranked list. Manager cannot clear another app's cache —
+no normal Android app can — so the button opens the system screen that can, and Manager measures
+again when you come back and tells you exactly how much actually went.
 
 ## About the signing key
 

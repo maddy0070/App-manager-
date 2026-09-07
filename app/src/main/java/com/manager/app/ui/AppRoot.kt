@@ -32,6 +32,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.manager.app.ManagerGraph
 import com.manager.app.design.ManagerTheme
+import com.manager.app.design.components.VizSegment
+import com.manager.app.domain.SelectionTotals
+import com.manager.app.domain.selectionTotals
 import com.manager.app.ui.apps.AppsScreen
 import com.manager.app.ui.common.NavigationRail
 import com.manager.app.ui.common.NoticeHost
@@ -39,6 +42,7 @@ import com.manager.app.ui.common.SelectionBar
 import com.manager.app.ui.dashboard.DashboardScreen
 import com.manager.app.ui.detail.AppDetailSurface
 import com.manager.app.ui.onboarding.OnboardingScreen
+import com.manager.app.ui.overlays.CacheSurface
 import com.manager.app.ui.overlays.ExtractionSurface
 import com.manager.app.ui.overlays.UninstallConfirmSurface
 import com.manager.app.ui.settings.SettingsSurface
@@ -60,6 +64,7 @@ fun AppRoot(viewModel: ManagerViewModel, graph: ManagerGraph) {
     val detail by viewModel.detail.collectAsState()
     val extraction by viewModel.extraction.collectAsState()
     val settingsOpen by viewModel.settingsOpen.collectAsState()
+    val cacheOpen by viewModel.cacheOpen.collectAsState()
 
     val pendingUninstall by viewModel.uninstallConfirm.collectAsState()
     val notices = remember { mutableStateListOf<Notice>() }
@@ -116,6 +121,13 @@ fun AppRoot(viewModel: ManagerViewModel, graph: ManagerGraph) {
             },
         )
 
+        CacheSurface(
+            visible = cacheOpen,
+            viewModel = viewModel,
+            graph = graph,
+            onDismiss = viewModel::closeCache,
+        )
+
         SettingsSurface(
             visible = settingsOpen,
             viewModel = viewModel,
@@ -152,20 +164,31 @@ fun AppRoot(viewModel: ManagerViewModel, graph: ManagerGraph) {
 
     BackHandler(enabled = detail != null) { viewModel.closeDetail() }
     BackHandler(enabled = detail == null && settingsOpen) { viewModel.closeSettings() }
-    BackHandler(enabled = detail == null && !settingsOpen && pendingUninstall.isNotEmpty()) {
+    BackHandler(enabled = detail == null && !settingsOpen && cacheOpen) { viewModel.closeCache() }
+    BackHandler(enabled = detail == null && !settingsOpen && !cacheOpen && pendingUninstall.isNotEmpty()) {
         viewModel.dismissUninstallConfirmation()
     }
-    BackHandler(enabled = detail == null && !settingsOpen && pendingUninstall.isEmpty() && extraction != null) {
+    BackHandler(enabled = detail == null && !settingsOpen && !cacheOpen && pendingUninstall.isEmpty() && extraction != null) {
         if (extraction?.finished == true) viewModel.dismissExtraction()
     }
     BackHandler(
-        enabled = detail == null && !settingsOpen && pendingUninstall.isEmpty() &&
+        enabled = detail == null && !settingsOpen && !cacheOpen && pendingUninstall.isEmpty() &&
             extraction == null && browse.selectionMode,
     ) { viewModel.exitSelection() }
     BackHandler(
-        enabled = detail == null && !settingsOpen && pendingUninstall.isEmpty() &&
+        enabled = detail == null && !settingsOpen && !cacheOpen && pendingUninstall.isEmpty() &&
             extraction == null && !browse.selectionMode && destination != Destination.Dashboard,
     ) { viewModel.navigate(Destination.Dashboard) }
+}
+
+/** The batch's composition, in the product's chart colours. Empty unless every app was measured. */
+private fun SelectionTotals.segments(colors: com.manager.app.design.ManagerColors): List<VizSegment> {
+    if (!hasBreakdown) return emptyList()
+    return listOf(
+        VizSegment("App", appBytes, colors.plot1),
+        VizSegment("Data", dataBytes, colors.plot3),
+        VizSegment("Cache", cacheBytes, colors.plot5),
+    ).filter { it.value > 0 }
 }
 
 /**
@@ -179,6 +202,7 @@ private fun MainShell(viewModel: ManagerViewModel, graph: ManagerGraph) {
     val destination by viewModel.destination.collectAsState()
     val browse by viewModel.browse.collectAsState()
     val visible by viewModel.visibleApps.collectAsState()
+    val colors = ManagerTheme.colors
     val density = LocalDensity.current
     val emphasized = ManagerTheme.motion.emphasized
     val exitEase = ManagerTheme.motion.exit
@@ -242,11 +266,12 @@ private fun MainShell(viewModel: ManagerViewModel, graph: ManagerGraph) {
                 exit = fadeOut(tween(120)) + scaleOut(targetScale = 0.92f, animationSpec = tween(180)),
             ) {
                 val selected = viewModel.selectedEntries()
+                val totals = selected.selectionTotals()
                 SelectionBar(
                     count = browse.selection.size,
-                    bytes = selected.sumOf { it.totalBytes },
-                    // Every selected app has to have been measured for the sum to be a measurement.
-                    measured = selected.isNotEmpty() && selected.all { it.storage != null },
+                    bytes = totals.bytes,
+                    measured = totals.measured,
+                    breakdown = totals.segments(colors),
                     allSelected = browse.selection.isNotEmpty() && browse.selection.size >= visible.size,
                     canExtract = selected.isNotEmpty(),
                     canUninstall = selected.any { it.isUninstallable },

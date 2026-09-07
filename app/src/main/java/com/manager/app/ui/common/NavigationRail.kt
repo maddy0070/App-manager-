@@ -39,10 +39,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.manager.app.design.ManagerIcons
 import com.manager.app.design.ManagerTheme
+import com.manager.app.design.components.CompositionBar
 import com.manager.app.design.components.CountingBytes
 import com.manager.app.design.components.InverseGlyphButton
 import com.manager.app.design.components.ManagerIcon
 import com.manager.app.design.components.Txt
+import com.manager.app.design.components.VizSegment
 import com.manager.app.design.components.pressResponse
 import com.manager.app.ui.Destination
 import com.manager.app.util.Format
@@ -170,6 +172,8 @@ fun SelectionBar(
     count: Int,
     bytes: Long,
     measured: Boolean,
+    /** App / data / cache of the whole batch. Empty when Android did not measure all of them. */
+    breakdown: List<VizSegment>,
     allSelected: Boolean,
     canExtract: Boolean,
     canUninstall: Boolean,
@@ -209,6 +213,7 @@ fun SelectionBar(
                         append(if (measured) "" else "about ")
                         append(Format.bytes(bytes))
                         if (!measured) append(", measured from APK size on disk")
+                        breakdown.forEach { append(". ${'$'}{it.label} ${'$'}{Format.bytes(it.value)}") }
                     }
                 },
         ) {
@@ -243,6 +248,18 @@ fun SelectionBar(
                 prefix = if (measured) "" else "≈",
                 gap = 3.dp,
             )
+            // What the total is made of, as proportion rather than three more figures. There is no
+            // room in a capsule for "APK 2.1 GB · Data 3.9 GB · Cache 840 MB", and the shape
+            // answers the question the numbers would — is this mostly app, or mostly data?
+            if (breakdown.isNotEmpty()) {
+                Spacer(Modifier.height(5.dp))
+                CompositionBar(
+                    segments = breakdown,
+                    modifier = Modifier.width(76.dp),
+                    height = 3.dp,
+                    animate = false,
+                )
+            }
         }
 
         Box(
