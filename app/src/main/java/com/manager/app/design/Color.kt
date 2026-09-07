@@ -119,3 +119,24 @@ val DarkColors = ManagerColors(
 )
 
 val LocalManagerColors = staticCompositionLocalOf { LightColors }
+
+/**
+ * The chart ramp, indexed.
+ *
+ * Wherever several things have to be told apart by colour alone — the apps in a batch about to be
+ * removed, the objects in the onboarding field — they take consecutive bands from this one ramp
+ * rather than inventing a palette. It is the only place in the product where more than one hue is
+ * on screen at once, and the contrast suite holds its bands separable from each other.
+ */
+@androidx.compose.runtime.Composable
+@androidx.compose.runtime.ReadOnlyComposable
+fun plotTint(index: Int): Color {
+    val colors = ManagerTheme.colors
+    return when (((index % 5) + 5) % 5) {
+        0 -> colors.plot1
+        1 -> colors.plot3
+        2 -> colors.plot5
+        3 -> colors.plot2
+        else -> colors.plot4
+    }
+}

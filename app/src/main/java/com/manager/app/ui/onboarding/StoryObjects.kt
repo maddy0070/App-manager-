@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -19,40 +17,39 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.manager.app.design.ManagerTheme
 import com.manager.app.design.SquircleShape
-import com.manager.app.design.components.ManagerIcon
+import com.manager.app.design.plotTint
 import com.manager.app.design.components.SelectionMark
 import com.manager.app.design.components.Txt
+import com.manager.app.util.Format
 
 /**
- * A story object, in whichever form the current beat calls for.
+ * One app, suspended in the field.
  *
- * There is one composable rather than a "chip" and a "row", because the last beat needs the chip
- * to *become* a row. [rowness] drives that: the surface flattens its shadow, tightens its corner,
- * and cross-fades between two readings of the same two facts inside a background that never
- * leaves the screen. The object reorganises; it is not swapped for a different object wearing the
- * same colour.
+ * Its width is not a layout choice — it is the datum. Everything else about the chip is the app
+ * row the product actually ships: the same icon tile, the same name-over-size stack, the same
+ * selection mark. What the user learns to read here is what they will be reading a tap later.
  *
- * Width is always explicit and always animated by the caller. Uniform widths make the floating
- * lattice provably non-overlapping, and they turn the chip-to-row change into a single continuous
- * measurement rather than a reflow.
+ * On selection the object also grows a little and its shadow deepens. That is the same idea as the
+ * width: the thing you just chose has weight, and the interface should behave as though it does.
  */
 @Composable
 fun StoryChip(
-    obj: StoryObject,
+    app: StoryApp,
     selected: Boolean,
-    rowness: Float,
     width: Dp,
     modifier: Modifier = Modifier,
 ) {
     val colors = ManagerTheme.colors
-    val shape = SquircleShape(lerpDp(18.dp, 15.dp, rowness), 0.72f)
+    val shape = SquircleShape(18.dp, 0.72f)
 
     val container by animateColorAsState(
         targetValue = if (selected) colors.signalSoft else colors.surface,
@@ -69,7 +66,7 @@ fun StoryChip(
         modifier = modifier
             .width(width)
             .shadow(
-                elevation = lerpDp(14.dp, 2.dp, rowness),
+                elevation = if (selected) 20.dp else 13.dp,
                 shape = shape,
                 clip = false,
                 ambientColor = colors.ink.copy(alpha = 0.22f),
@@ -78,64 +75,42 @@ fun StoryChip(
             .clip(shape)
             .background(container)
             .border(if (selected) 1.5.dp else 1.dp, outline, shape)
-            .padding(horizontal = 13.dp, vertical = 11.dp),
+            .padding(horizontal = 13.dp, vertical = 11.dp)
+            .semantics {
+                contentDescription = "${app.label}, ${Format.bytes(app.totalBytes)}"
+                stateDescription = if (selected) "Selected" else "Not selected"
+            },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        StoryTile(obj = obj, selected = selected, size = 28.dp)
+        StoryTile(app = app, selected = selected, size = 30.dp)
         Spacer(Modifier.width(11.dp))
-
-        Box(Modifier.weight(1f)) {
-            if (rowness < 0.99f) {
-                Column(Modifier.graphicsLayer { alpha = 1f - rowness }) {
-                    Txt(
-                        obj.label.uppercase(),
-                        style = ManagerTheme.type.eyebrow,
-                        color = colors.inkTertiary,
-                        maxLines = 1,
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Txt(obj.summary, style = ManagerTheme.type.numericS, color = colors.ink, maxLines = 1)
-                }
-            }
-            if (rowness > 0.01f) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .graphicsLayer { alpha = rowness },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Txt(
-                        obj.label,
-                        style = ManagerTheme.type.strong,
-                        color = colors.ink,
-                        maxLines = 1,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Txt(obj.summary, style = ManagerTheme.type.numericS, color = colors.inkSecondary, maxLines = 1)
-                }
-            }
+        Column {
+            Txt(app.label, style = ManagerTheme.type.strong, color = colors.ink, maxLines = 1)
+            Txt(
+                Format.bytes(app.totalBytes),
+                style = ManagerTheme.type.numericS,
+                color = colors.inkTertiary,
+                maxLines = 1,
+            )
         }
     }
 }
 
 /**
- * The object's face.
+ * The object's face: its initial on a band from the product's chart ramp.
  *
- * Apps get their initial, facts get a glyph — identity versus meaning. It also means an app tile
- * never has to borrow an icon that already carries a different meaning elsewhere in the product.
- * On selection the tile hands over to the same mark the real app list uses, so the gesture the
- * story teaches is literally the gesture that ships.
+ * The band is the app's identity for the rest of the story — when the batch is removed, each app
+ * becomes a block of exactly this colour, which is what makes "these five things became that
+ * measurement" legible without a single label.
  */
 @Composable
 fun StoryTile(
-    obj: StoryObject,
+    app: StoryApp,
     selected: Boolean,
     size: Dp,
     modifier: Modifier = Modifier,
 ) {
-    val colors = ManagerTheme.colors
-    val tint = appTint(obj.tint)
+    val tint = plotTint(app.tint)
 
     Box(modifier.size(size), contentAlignment = Alignment.Center) {
         Box(
@@ -143,34 +118,17 @@ fun StoryTile(
                 .size(size)
                 .graphicsLayer { alpha = if (selected) 0f else 1f }
                 .clip(SquircleShape(size * 0.32f, 0.85f))
-                .background(if (obj.isApp) tint.copy(alpha = 0.16f) else colors.canvasSunken),
+                .background(tint.copy(alpha = 0.18f)),
             contentAlignment = Alignment.Center,
         ) {
-            if (obj.isApp) {
-                Txt(
-                    obj.initial,
-                    style = ManagerTheme.type.titleM.copy(fontSize = (size.value * 0.42f).sp),
-                    color = tint,
-                    maxLines = 1,
-                )
-            } else {
-                obj.icon?.let { ManagerIcon(it, null, tint = colors.inkSecondary, size = size * 0.5f) }
-            }
+            Txt(
+                app.initial,
+                style = ManagerTheme.type.titleM.copy(fontSize = (size.value * 0.42f).sp),
+                color = tint,
+                maxLines = 1,
+            )
         }
         if (selected) SelectionMark(selected = true, size = size)
-    }
-}
-
-/** The plot ramp doubles as the app palette — five tints that already belong to the system. */
-@Composable
-fun appTint(index: Int): Color {
-    val colors = ManagerTheme.colors
-    return when (index % 5) {
-        0 -> colors.plot1
-        1 -> colors.plot2
-        2 -> colors.plot3
-        3 -> colors.signal
-        else -> colors.ember
     }
 }
 

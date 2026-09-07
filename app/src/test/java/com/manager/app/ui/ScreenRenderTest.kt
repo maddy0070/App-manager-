@@ -117,10 +117,11 @@ class ScreenRenderTest {
     }
 
     @Test
-    fun `onboarding opens on the discovery beat with a way out`() {
+    fun `onboarding opens on the field, on sample data, with a way out`() {
         compose.setContent { ManagerTheme { AppRoot(viewModel, graph) } }
-        compose.onNodeWithText("There's a lot\ngoing on.").assertIsDisplayed()
-        compose.onNodeWithText("Skip intro").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Radio, 2.4 GB").assertIsDisplayed()
+        compose.onNodeWithText("Sample data").assertIsDisplayed()
+        compose.onNodeWithText("Skip").assertIsDisplayed()
     }
 
     @Test
@@ -246,6 +247,8 @@ class ScreenRenderTest {
                     NavigationRail(current = Destination.Dashboard, onSelect = {})
                     SelectionBar(
                         count = 3,
+                        bytes = 5_175_453_286L,
+                        measured = true,
                         allSelected = false,
                         canExtract = true,
                         canUninstall = true,
@@ -260,6 +263,47 @@ class ScreenRenderTest {
         // The nav label carries no semantics of its own — the row announces the destination once,
         // which is what a screen reader should hear.
         compose.onNodeWithContentDescription("Overview").assertIsDisplayed()
+    }
+
+    @Test
+    fun `the selection bar states the weight of the batch, and marks it when it is an estimate`() {
+        compose.setContent {
+            ManagerTheme {
+                androidx.compose.foundation.layout.Column {
+                    SelectionBar(
+                        count = 3, bytes = 5_175_453_286L, measured = true, allSelected = false,
+                        canExtract = true, canUninstall = true,
+                        onSelectAll = {}, onExtract = {}, onUninstall = {}, onDismiss = {},
+                    )
+                    SelectionBar(
+                        count = 1, bytes = 88_080_384L, measured = false, allSelected = true,
+                        canExtract = true, canUninstall = false,
+                        onSelectAll = {}, onExtract = {}, onUninstall = {}, onDismiss = {},
+                    )
+                }
+            }
+        }
+        // The count and the figure are one reading, so a screen reader hears the decision rather
+        // than three unrelated fragments — and the estimate says so in words, not just a glyph.
+        compose.onNodeWithContentDescription("3 apps selected, 4.8 GB").assertIsDisplayed()
+        compose.onNodeWithContentDescription(
+            "1 app selected, about 84 MB, measured from APK size on disk",
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun `the confirmation leads with what comes back rather than burying it`() {
+        compose.setContent {
+            ManagerTheme {
+                UninstallConfirmSurface(
+                    entries = listOf(entry("a", "Alpha", measured = true), entry("b", "Beta", measured = true)),
+                    graph = graph,
+                    onConfirm = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("Comes back", substring = true).assertIsDisplayed()
     }
 
     // ---- Visualisations at their degenerate inputs -------------------------------------------

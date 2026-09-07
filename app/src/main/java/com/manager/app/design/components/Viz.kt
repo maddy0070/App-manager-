@@ -20,6 +20,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -44,10 +45,15 @@ fun CompositionBar(
     modifier: Modifier = Modifier,
     height: Dp = 12.dp,
     animate: Boolean = true,
+    split: Float = 1f,
 ) {
     val colors = ManagerTheme.colors
     val visible = segments.filter { it.value > 0 }
     val total = visible.sumOf { it.value }.coerceAtLeast(1L)
+    // How far the bar has been taken apart. At 1 it is the composition; at 0 it is one undivided
+    // block of a single colour — the same quantity, before anyone has said what it is made of.
+    val apart = split.coerceIn(0f, 1f)
+    val whole = visible.firstOrNull()?.color ?: colors.signal
 
     val progress = remember { Animatable(if (animate) 0f else 1f) }
     val easing = ManagerTheme.motion.emphasized
@@ -64,14 +70,14 @@ fun CompositionBar(
     ) {
         Canvas(Modifier.fillMaxSize()) {
             if (visible.isEmpty()) return@Canvas
-            val gap = size.height * 0.22f
+            val gap = size.height * 0.22f * apart
             val usable = size.width - gap * (visible.size - 1).coerceAtLeast(0)
             var x = 0f
             visible.forEach { segment ->
                 val width = usable * (segment.value.toFloat() / total) * progress.value
                 if (width > 0.4f) {
                     drawRoundRect(
-                        color = segment.color,
+                        color = lerp(whole, segment.color, apart),
                         topLeft = Offset(x, 0f),
                         size = Size(width, size.height),
                         cornerRadius = CornerRadius(size.height / 2f),

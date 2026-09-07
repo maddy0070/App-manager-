@@ -14,7 +14,7 @@ and transition in the app is drawn by this codebase.
 ```bash
 ./gradlew assembleRelease      # app/build/outputs/apk/release/app-release.apk  (~3 MB)
 ./gradlew assembleDebug        # installs alongside release as com.manager.app.debug
-./gradlew test                 # 79 unit, composition and interaction tests, no device
+./gradlew test                 # 82 unit, composition and interaction tests, no device
 ```
 
 The release variant is signed with the checked-in `app/debug.keystore`. That is deliberate for a
@@ -27,19 +27,23 @@ sideloaded personal build: the key is stable, so updates install over one anothe
 
 ## What it does
 
-**Onboarding** — a forty-second interactive story rather than a slideshow. A field of suspended
-objects; tap one and that object grows into a detail surface; drag the surface and the numbers
-fill in under your finger; hold an app to select it, pick two more and watch them converge into
-the selection capsule; then the whole scattered field resolves into the list the product is. It
-runs entirely on sample data, so it behaves identically on a fresh install with nothing scanned
-and nothing granted. Skippable from anywhere.
+**Onboarding** — an object you are handed, not a tour you are taken on. There are no steps and
+nothing to advance: one field of five apps, each drawn at the width of what it weighs, and a bar
+along the bottom that always states the weight of whatever is in play. Touch an app and it
+*becomes* the detail surface; drag that surface and the single figure it arrived with comes apart
+into app, data and cache; hold one and it is selected exactly as in the real list, and its weight
+lands in the bar; remove the batch and the chosen objects collapse into a measured rail and then
+leave it. Nothing instructs — the one sentence on the screen arrives at the end, after everything
+it claims has already happened under the reader's own finger. Runs entirely on sample data, so it
+behaves identically on a fresh install with nothing scanned and nothing granted. Skippable.
 
 **Overview** — a device summary: how many apps and the user/system split, storage broken down by
 origin, your five most-used apps, what arrived recently, a twelve-month install timeline, the
 largest apps, and anything untouched for three weeks or more.
 
 **Apps** — the full inventory. Search by name or package, seven filters, five sort keys in both
-directions. Long-press to enter selection mode; the navigation bar becomes an action bar.
+directions. Long-press to enter selection mode; the navigation bar becomes an action bar carrying
+the combined weight of the selection, which travels to its new value as apps go in and out.
 
 **Usage** — every app ranked by foreground time over Today / 3 / 7 / 30 days.
 
@@ -99,6 +103,10 @@ caused, eased tweens for anything the system caused. Nothing in the app animates
 
 **Signature interactions**
 - The detail panel's shared-element flight from the tapped row.
+- The action bar answers "how much is this?" before you have asked: the count is trivia, the
+  weight is the decision, and it accumulates rather than being redrawn.
+- The uninstall confirmation leads with what comes back, drawn as the batch itself — one rail,
+  one block per app, sized against each other.
 - Pull-to-refresh assembles the app's mark tile by tile as you pull.
 - The navigation bar and the selection action bar share one capsule and one slot.
 - Selection inverts the whole row rather than adding a checkbox to a gap.
@@ -129,7 +137,7 @@ would mean scanning the device twice and letting two screens disagree about what
 
 ## Tests
 
-`./gradlew test` runs 79 tests with no device attached:
+`./gradlew test` runs 82 tests with no device attached:
 
 - **Format** — every unit, duration and date string the user reads.
 - **Contrast** — the palette against WCAG, computed rather than eyeballed: every ink level on
@@ -142,9 +150,10 @@ would mean scanning the device twice and letting two screens disagree about what
   ratios, radii larger than the box, zero sizes.
 - **ScreenRender** — Robolectric renders the real Compose tree for every screen, both themes, plus
   each visualisation at its degenerate inputs and app names long enough to break a layout.
-- **StoryFlow** — plays the onboarding end to end with real gestures: taps an object open, drags
-  the surface to fill it in, long-presses to select, picks two more, and checks the story reaches
-  its ending with a working way out. Also runs the whole thing on a small phone.
+- **StoryFlow** — plays the onboarding with real gestures: measures the objects against each
+  other to prove width really is weight, opens one, drags its figure apart, throws it back, holds
+  to select, watches the total accumulate and release, removes the batch, and checks there is a
+  working way out. It also asserts that nothing on the screen instructs. Runs on a small phone too.
 
 Both render suites run at the target device's size with native graphics. Robolectric's defaults
 are a 320x470 mdpi screen with stubbed text measurement that lays every string out one character

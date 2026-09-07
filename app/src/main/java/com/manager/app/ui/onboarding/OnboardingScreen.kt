@@ -1,7 +1,7 @@
 package com.manager.app.ui.onboarding
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -14,19 +14,22 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -35,6 +38,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,733 +50,600 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.manager.app.design.ManagerIcons
 import com.manager.app.design.ManagerTheme
-import com.manager.app.design.SquircleShape
+import com.manager.app.design.plotTint
+import com.manager.app.design.components.CountingBytes
+import com.manager.app.design.components.InverseGlyphButton
 import com.manager.app.design.components.ManagerButton
-import com.manager.app.design.components.ManagerIcon
 import com.manager.app.design.components.ManagerMark
 import com.manager.app.design.components.ManagerTextAction
+import com.manager.app.design.components.ReclaimBlock
 import com.manager.app.design.components.Txt
+import com.manager.app.design.components.VizSegment
 import com.manager.app.design.components.driftOffset
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
- * Onboarding as a short interactive demonstration rather than a slideshow.
+ * Onboarding as an object you are handed, rather than a tour you are taken on.
  *
- * Four beats, roughly forty seconds, driven by the user's own gestures: a field of suspended
- * objects, one of which they open; a surface they drag to fill in; a handful of apps they select;
- * and the whole scattered field resolving into the list the product actually is. Every claim the
- * copy makes has already happened under the reader's finger by the time they read it.
+ * There are no steps here and nothing to advance. The screen is a field of five apps drawn at the
+ * size of what they weigh, and a bar along the bottom that always states the weight of whatever is
+ * currently in play. Everything the product does is reachable from that one arrangement, in any
+ * order, as many times as the user likes:
  *
- * Entirely self-contained. It runs on [StoryCast] — sample data — so a fresh install with no
- * permissions and no completed package scan tells the same story, deterministically.
+ *  - touch an app and it *becomes* the detail surface, then drag that surface and the single figure
+ *    it arrived with comes apart into app, data, cache and the rest of the record;
+ *  - hold an app and it is selected, exactly as in the real list, and its weight lands in the bar;
+ *  - select more and the figure accumulates, while the unchosen objects ease away from the ones
+ *    that just gained mass;
+ *  - remove the batch and the chosen objects collapse into a measured rail and then leave it,
+ *    which is the same moment the real confirmation sheet shows.
+ *
+ * Nothing instructs. The only line of copy that is not a label is the one at the very end, after
+ * every claim it makes has already happened under the reader's own finger.
+ *
+ * Entirely self-contained: it runs on [StoryCast], so a fresh install with nothing granted and
+ * nothing scanned tells the same story, deterministically.
  */
 @Composable
 fun OnboardingScreen(onFinish: () -> Unit) {
     val colors = ManagerTheme.colors
-    val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
 
-    var scene by remember { mutableStateOf(Scene.Discovery) }
-    var openedId by remember { mutableStateOf<String?>(null) }
+    var phase by remember { mutableStateOf(Phase.Field) }
+    var openedIndex by remember { mutableStateOf<Int?>(null) }
     var openedCentre by remember { mutableStateOf(Offset(0.5f, 0.3f)) }
     var selection by remember { mutableStateOf(emptySet<String>()) }
-    var converged by remember { mutableStateOf(false) }
-    var cueVisible by remember { mutableStateOf(false) }
-    var hasDragged by remember { mutableStateOf(false) }
+    var touched by remember { mutableStateOf(false) }
+    var closedOnce by remember { mutableStateOf(false) }
+    var closeRequests by remember { mutableIntStateOf(0) }
 
     val morph = remember { Animatable(0f) }
     val reveal = remember { Animatable(0f) }
-    val rowness = remember { Animatable(0f) }
-    val summaryIn = remember { Animatable(0f) }
-    val capsuleIn = remember { Animatable(0f) }
+    val ledgerIn = remember { Animatable(0f) }
+    val panelIn = remember { Animatable(0f) }
+    val lift = remember { Animatable(1f) }
+    val invite = remember { Animatable(0f) }
+    val stillness = remember { Animatable(0f) }
+    val doneIn = remember { Animatable(0f) }
 
-    // Motion tokens read once here: the staged animations below run inside effects, which are
-    // coroutine scope rather than composition scope.
+    // Motion tokens read once: the staged animations below run in coroutine scope, not composition.
     val emphasized = ManagerTheme.motion.emphasized
     val exitEase = ManagerTheme.motion.exit
+    val standardEase = ManagerTheme.motion.standardEase
 
-    val objects = remember {
-        StoryCast.mapIndexed { index, obj ->
-            ObjectState(obj, StoryStaging.discovery(index, obj.id))
-        }
-    }
-    val byId = remember { objects.associateBy { it.obj.id } }
-    val sizes = remember { mutableStateMapOf<String, IntSize>() }
+    val objects = remember { StoryCast.indices.map { ObjectState(StoryStaging.home(it)) } }
+    val sizes = remember { mutableStateMapOf<Int, IntSize>() }
+    val inviteIndex = remember { StoryCast.indices.maxBy { StoryCast[it].totalBytes } }
+
+    val selectedApps = StoryCast.filter { it.id in selection }
+    val ledgerBytes = if (selection.isEmpty()) StoryCast.sumOf { it.totalBytes } else selectedApps.sumOf { it.totalBytes }
+    val ledgerCount = if (selection.isEmpty()) StoryCast.size else selectedApps.size
 
     // The field never stops breathing; each object traces its own slow path.
     val transition = rememberInfiniteTransition(label = "storyDrift")
-    val phase by transition.animateFloat(
+    val phaseAngle by transition.animateFloat(
         initialValue = 0f,
         targetValue = (2 * Math.PI).toFloat(),
         animationSpec = infiniteRepeatable(tween(21_000, easing = LinearEasing), RepeatMode.Restart),
         label = "storyPhase",
     )
 
-    BoxWithConstraints(
-        Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    0f to colors.canvas,
-                    0.6f to colors.canvas,
-                    1f to if (colors.isLight) colors.signalSoft.copy(alpha = 0.5f) else colors.canvasSunken,
-                ),
-            ),
-    ) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(colors.canvas)) {
         val stageWidth = maxWidth
         val stageHeight = maxHeight
         val density = LocalDensity.current
-        val chipWidth = lerpDp(
-            stageWidth * StoryStaging.CHIP_MAX_WIDTH_FRACTION,
-            stageWidth * 0.84f,
-            rowness.value,
-        )
-        val capsuleCentre = Offset(0.5f, 0.63f)
 
-        // Gesture handling is hoisted so the pointer inputs below can be keyed on identity alone.
-        // A handler re-installed mid-gesture drops the touch that caused it.
-        val handleTap by rememberUpdatedState<(StoryObject, ObjectState) -> Unit> { obj, state ->
-            when {
-                scene == Scene.Discovery && obj.isApp -> {
-                    openedId = obj.id
-                    openedCentre = state.centre.value
-                    scene = Scene.Explore
-                }
-                // A fact is context, not a subject: it acknowledges the touch and stays put,
-                // which is itself the lesson.
-                scene == Scene.Discovery -> scope.nudge(state)
-                scene == Scene.Gather && obj.isApp && selection.isNotEmpty() && !converged ->
-                    selection = if (obj.id in selection) selection - obj.id else selection + obj.id
-                scene == Scene.Gather && obj.isApp -> scope.nudge(state)
-                else -> Unit
+        // Where the batch comes to rest: the track inside the panel that replaces the bar.
+        // Measured from the bottom: the inset, the slot's own margin, the reserved way-out, the
+        // panel's padding, and half the track.
+        val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val railY = 1f - ((bottomInset + 14.dp + 68.dp + 20.dp + 40.dp) / stageHeight)
+        val railInset = 38.dp / stageWidth
+        val railSpan = 1f - railInset * 2f
+
+        // The bar gets out of the way of the surface it made room for, completely: left at a few
+        // percent it would sit over the sheet and still take the taps meant for it.
+        val ledgerPresence = ledgerIn.value * (1f - morph.value)
+
+        // ---- Gestures. The real ones: hold to start selecting, tap to open or toggle. ----------
+
+        val onTap by rememberUpdatedState<(Int) -> Unit> { index ->
+            if (phase != Phase.Field) return@rememberUpdatedState
+            touched = true
+            val app = StoryCast[index]
+            if (selection.isEmpty()) {
+                openedCentre = objects[index].centre.value
+                openedIndex = index
+            } else {
+                selection = if (app.id in selection) selection - app.id else selection + app.id
             }
         }
-        val handleLongPress by rememberUpdatedState<(StoryObject) -> Unit> { obj ->
-            if (scene == Scene.Gather && obj.isApp && !converged) {
+        val onHold by rememberUpdatedState<(Int) -> Unit> { index ->
+            if (phase != Phase.Field) return@rememberUpdatedState
+            touched = true
+            if (selection.isEmpty()) {
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                if (obj.id !in selection) selection = selection + obj.id
+                selection = setOf(StoryCast[index].id)
             }
         }
 
-        // ---- Beat one: the cue arrives only once the field has been allowed to settle. -------
-        LaunchedEffect(scene) {
-            cueVisible = false
-            when (scene) {
-                Scene.Discovery -> { delay(1500); cueVisible = true }
-                Scene.Gather -> { delay(800); cueVisible = true }
-                else -> Unit
-            }
+        // ---- The bar arrives a beat after the field, so the field is what is looked at first ---
+
+        LaunchedEffect(Unit) {
+            delay(560)
+            ledgerIn.animateTo(1f, spring(dampingRatio = 0.78f, stiffness = 300f))
         }
 
-        // ---- Beat two: if the surface is not pulled, it offers itself once in a while. -------
-        LaunchedEffect(scene, hasDragged) {
-            if (scene != Scene.Explore || hasDragged) return@LaunchedEffect
+        // ---- The invitation. Shown, never written. ----------------------------------------------
+
+        val invitation = when {
+            phase != Phase.Field || openedIndex != null -> Invitation.None
+            !touched -> Invitation.Breathe
+            closedOnce && selection.isEmpty() -> Invitation.Hold
+            else -> Invitation.None
+        }
+        LaunchedEffect(invitation) {
+            if (invitation == Invitation.None) {
+                invite.animateTo(0f, tween(200))
+                return@LaunchedEffect
+            }
+            var round = 0
             while (true) {
-                delay(2600)
-                if (hasDragged) return@LaunchedEffect
-                reveal.animateTo(0.085f, spring(dampingRatio = 0.62f, stiffness = 380f))
-                reveal.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = 300f))
-            }
-        }
-
-        // ---- The story only ever moves forward, and each move is one staged animation. -------
-        LaunchedEffect(scene) {
-            when (scene) {
-                Scene.Discovery -> Unit
-
-                Scene.Explore -> {
-                    objects.forEach { state ->
-                        if (state.obj.id == openedId) {
-                            scope.launch { state.alpha.animateTo(0f, tween(90)) }
-                        } else {
-                            scope.launch { state.alpha.animateTo(0.10f, tween(420, easing = emphasized)) }
-                            scope.launch { state.scale.animateTo(0.94f, spring(dampingRatio = 1f, stiffness = 260f)) }
-                        }
-                    }
-                    morph.animateTo(1f, spring(dampingRatio = 0.86f, stiffness = 380f))
-                }
-
-                Scene.Gather -> {
-                    // The surface shrinks back into the object it grew from before the field
-                    // rearranges, so nothing is ever replaced off-screen.
-                    reveal.animateTo(0f, tween(260, easing = exitEase))
-                    morph.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = 420f))
-                    openedId?.let { byId[it]?.alpha?.animateTo(1f, tween(180)) }
-                    openedId = null
-
-                    var appIndex = 0
-                    objects.forEach { state ->
-                        if (state.obj.isApp) {
-                            val target = StoryStaging.gather(appIndex++)
-                            scope.launch { state.centre.animateTo(target, CentreSpring) }
-                            scope.launch { state.alpha.animateTo(1f, tween(300)) }
-                            scope.launch { state.scale.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 300f)) }
-                        } else {
-                            // Facts stay where they are and step back into the background.
-                            scope.launch { state.alpha.animateTo(0.10f, tween(500)) }
-                            scope.launch { state.scale.animateTo(0.86f, spring(dampingRatio = 1f, stiffness = 220f)) }
-                        }
-                    }
-                }
-
-                Scene.Resolved -> {
-                    capsuleIn.animateTo(0f, tween(220, easing = exitEase))
-                    var appIndex = 0
-                    objects.forEach { state ->
-                        if (state.obj.isApp) {
-                            val target = StoryStaging.resolvedApp(appIndex++)
-                            scope.launch { state.centre.animateTo(target, ResolveSpring) }
-                            scope.launch { state.alpha.animateTo(1f, tween(320)) }
-                            scope.launch { state.scale.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 240f)) }
-                        } else {
-                            // The five facts collapse into the one summary that replaces them.
-                            scope.launch { state.centre.animateTo(StoryStaging.SummaryCentre, ResolveSpring) }
-                            scope.launch { state.scale.animateTo(0.45f, tween(520, easing = emphasized)) }
-                            scope.launch { state.alpha.animateTo(0f, tween(520, easing = emphasized)) }
-                        }
-                    }
-                    scope.launch { rowness.animateTo(1f, tween(620, easing = emphasized)) }
-                    delay(280)
-                    summaryIn.animateTo(1f, spring(dampingRatio = 0.82f, stiffness = 240f))
+                delay(
+                    when {
+                        invitation == Invitation.Hold -> 3200L
+                        round == 0 -> 2300L
+                        else -> 5400L
+                    },
+                )
+                round++
+                if (invitation == Invitation.Breathe) {
+                    // Something with mass, settling. Enough to say "this is alive and touchable".
+                    invite.animateTo(1f, tween(560, easing = emphasized))
+                    invite.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 220f))
+                } else {
+                    // The shape of a long press, performed rather than described: the object
+                    // compresses, holds, and springs back.
+                    invite.animateTo(-1f, tween(280, easing = standardEase))
+                    delay(440)
+                    invite.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 420f))
                 }
             }
         }
 
-        // ---- The field ----------------------------------------------------------------------
+        // ---- Selection displaces the field ------------------------------------------------------
 
-        // Facts are drawn first and apps second, always. In the beats where the two overlap the
-        // apps are the subject, and a 10%-opacity chip veiling a crisp one would be backwards.
-        // A fixed order also means the z-stack never pops mid-story.
-        val drawOrder = remember(objects) {
-            objects.withIndex().sortedBy { (_, state) -> if (state.obj.isApp) 1 else 0 }
+        LaunchedEffect(selection, phase) {
+            if (phase != Phase.Field) return@LaunchedEffect
+            objects.forEachIndexed { index, state ->
+                val chosen = StoryCast[index].id in selection
+                launch { state.centre.animateTo(StoryStaging.displaced(index, selection), DisplaceSpring) }
+                if (openedIndex == null) {
+                    launch { state.scale.animateTo(if (chosen) 1.045f else 1f, spring(dampingRatio = 0.62f, stiffness = 420f)) }
+                }
+            }
         }
 
-        drawOrder.forEach { (index, state) ->
-            val obj = state.obj
+        // ---- Opening an object ------------------------------------------------------------------
+
+        LaunchedEffect(openedIndex) {
+            val index = openedIndex ?: return@LaunchedEffect
+            reveal.snapTo(0f)
+            objects.forEachIndexed { other, state ->
+                if (other == index) {
+                    launch { state.alpha.animateTo(0f, tween(90)) }
+                } else {
+                    launch { state.alpha.animateTo(0.10f, tween(420, easing = emphasized)) }
+                    launch { state.scale.animateTo(0.94f, spring(dampingRatio = 1f, stiffness = 260f)) }
+                }
+            }
+            morph.animateTo(1f, spring(dampingRatio = 0.86f, stiffness = 380f))
+        }
+
+        // The surface shrinks back into the object it grew from; only then is it gone.
+        LaunchedEffect(closeRequests) {
+            if (closeRequests == 0) return@LaunchedEffect
+            val index = openedIndex ?: return@LaunchedEffect
+            reveal.animateTo(0f, tween(220, easing = exitEase))
+            launch { objects[index].alpha.animateTo(1f, tween(200, delayMillis = 120)) }
+            morph.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = 420f))
+            openedIndex = null
+            closedOnce = true
+            objects.forEachIndexed { other, state ->
+                launch { state.alpha.animateTo(1f, tween(260)) }
+                launch {
+                    val chosen = StoryCast[other].id in selection
+                    state.scale.animateTo(if (chosen) 1.045f else 1f, spring(dampingRatio = 0.8f, stiffness = 300f))
+                }
+            }
+        }
+
+        // ---- Removal: the batch becomes a measurement, and then the measurement leaves ----------
+
+        LaunchedEffect(phase) {
+            if (phase != Phase.Reclaim) return@LaunchedEffect
+            launch { stillness.animateTo(1f, tween(700, easing = emphasized)) }
+            launch { ledgerIn.animateTo(0f, tween(180, easing = exitEase)) }
+            launch { panelIn.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 300f)) }
+
+            // Everything not chosen steps out of the story.
+            objects.forEachIndexed { index, state ->
+                if (StoryCast[index].id !in selection) {
+                    launch { state.alpha.animateTo(0f, tween(340, easing = exitEase)) }
+                }
+            }
+
+            // The chosen travel to their own slot in the rail and hand over to the block there,
+            // which carries the same colour they did. That is what makes five objects becoming one
+            // measurement legible without a caption.
+            val total = selectedApps.sumOf { it.totalBytes }.coerceAtLeast(1L)
+            var running = 0f
+            val slots = selectedApps.map { app ->
+                val share = app.totalBytes.toFloat() / total
+                val centre = railInset + railSpan * (running + share / 2f)
+                running += share
+                app.id to centre
+            }.toMap()
+
+            delay(200)
+            selectedApps.forEachIndexed { order, app ->
+                val index = StoryCast.indexOfFirst { it.id == app.id }
+                val x = slots[app.id] ?: 0.5f
+                launch {
+                    delay(order * 90L)
+                    launch { objects[index].centre.animateTo(Offset(x, railY), ConvergeSpring) }
+                    launch { objects[index].scale.animateTo(0.2f, tween(430, easing = emphasized)) }
+                    launch { objects[index].alpha.animateTo(0f, tween(380, delayMillis = 90)) }
+                }
+            }
+
+            // The rail fills as they land, holds, and then empties. The gap it is left with is the
+            // space that comes back — the figure above it never had to change to say so.
+            delay(320)
+            lift.animateTo(0f, tween(760, easing = emphasized))
+            delay(640)
+            lift.animateTo(1f, tween(980, easing = emphasized))
+            phase = Phase.Done
+        }
+
+        // Deliberately its own effect. The sequence above is keyed on the phase and ends by
+        // changing it, so anything it tried to run after that line would be cancelled with it.
+        LaunchedEffect(phase) {
+            if (phase == Phase.Done) doneIn.animateTo(1f, spring(dampingRatio = 0.84f, stiffness = 260f))
+        }
+
+        // ---- The field --------------------------------------------------------------------------
+
+        objects.forEachIndexed { index, state ->
             // An object that has handed its role to something else is gone, not merely invisible:
-            // leaving it composed would keep it in the semantics tree for a screen reader to
-            // announce, and would let two things claim the same identity at once.
-            if (state.alpha.value < 0.02f) return@forEach
-            val selected = obj.id in selection
-            // Objects dimmed into the background are scenery; they should not be read out.
+            // leaving it composed keeps it in the semantics tree and lets it swallow a touch meant
+            // for something underneath.
+            if (state.alpha.value < 0.02f) return@forEachIndexed
+            val app = StoryCast[index]
+            val selected = app.id in selection
             val decorative = state.alpha.value < 0.35f
-            val measured = sizes[obj.id]
-            val fallbackWidth = with(density) { chipWidth.roundToPx() }
-            val width = measured?.width ?: fallbackWidth
-            val height = measured?.height ?: with(density) { 52.dp.roundToPx() }
+            val width = stageWidth * StoryStaging.widthFraction(app)
+            val measured = sizes[index]
+            val pxWidth = measured?.width ?: with(density) { width.roundToPx() }
+            val pxHeight = measured?.height ?: with(density) { 57.dp.roundToPx() }
 
-            // Drift is additive and dies away as the field resolves, so the final list is still.
-            val drift = driftOffset(phase, index * 3 + 1, 5.5f) * (1f - rowness.value)
+            // Drift is additive and dies away once the field stops being the subject.
+            val drift = driftOffset(phaseAngle, index * 3 + 1, 5.5f) * (1f - stillness.value)
             val centre = state.centre.value
-            val x = stageWidth.value * density.density * centre.x - width / 2f + drift.x
-            val y = stageHeight.value * density.density * centre.y - height / 2f + drift.y
+            val x = stageWidth.value * density.density * centre.x - pxWidth / 2f + drift.x
+            val y = stageHeight.value * density.density * centre.y - pxHeight / 2f + drift.y
+            val invited = if (index == inviteIndex) invite.value else 0f
 
             Box(
                 Modifier
                     .offset { IntOffset(x.roundToInt(), y.roundToInt()) }
-                    .onSizeChanged { sizes[obj.id] = it }
+                    .onSizeChanged { sizes[index] = it }
                     .graphicsLayer {
                         alpha = state.alpha.value
-                        scaleX = state.scale.value
-                        scaleY = state.scale.value
+                        val s = state.scale.value * (1f + invited * 0.04f)
+                        scaleX = s
+                        scaleY = s
+                        // Rising reads as something you could pick up; growing alone reads as a
+                        // pulsing button. Negative values are the press being demonstrated.
+                        translationY = -invited.coerceAtLeast(0f) * 5.dp.toPx()
                     }
-                    // Scenery is inert. A dimmed object left listening would sit invisibly over a
-                    // live one and swallow the tap meant for it — and would be announced by a
-                    // screen reader as though it were still part of the story.
                     .then(
                         if (decorative) {
                             Modifier.clearAndSetSemantics { }
                         } else {
-                            Modifier.pointerInput(obj.id) {
-                                detectTapGestures(
-                                    onLongPress = { handleLongPress(obj) },
-                                    onTap = { handleTap(obj, state) },
-                                )
-                            }
+                            Modifier.combinedClickable(
+                                interactionSource = remember(index) { MutableInteractionSource() },
+                                indication = null,
+                                onClickLabel = when {
+                                    selection.isEmpty() -> "Open details"
+                                    selected -> "Deselect"
+                                    else -> "Select"
+                                },
+                                onLongClickLabel = if (selection.isEmpty()) "Select" else null,
+                                onLongClick = { onHold(index) },
+                                onClick = { onTap(index) },
+                            )
                         },
                     ),
             ) {
-                StoryChip(
-                    obj = obj,
-                    selected = selected,
-                    rowness = rowness.value,
-                    width = chipWidth,
+                StoryChip(app = app, selected = selected, width = width)
+            }
+        }
+
+        // ---- The bar that always says what things weigh --------------------------------------------
+
+        Box(
+            Modifier
+                .fillMaxSize()
+                .systemBarsPadding()
+                .padding(horizontal = 18.dp, vertical = 14.dp),
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            if (ledgerPresence > 0.01f) {
+                StoryLedger(
+                    count = ledgerCount,
+                    bytes = ledgerBytes,
+                    selecting = selection.isNotEmpty(),
+                    presence = ledgerIn.value * (1f - morph.value * 0.94f),
+                    onClear = { selection = emptySet() },
+                    onRemove = { if (selection.isNotEmpty()) phase = Phase.Reclaim },
                 )
             }
         }
 
-        // ---- The summary the facts became -----------------------------------------------------
+        // ---- The surface an object became ---------------------------------------------------------
 
-        if (summaryIn.value > 0.01f) {
-            SummaryCard(
-                progress = summaryIn.value,
-                centre = StoryStaging.SummaryCentre,
-                stageWidth = stageWidth,
-                stageHeight = stageHeight,
-            )
-        }
-
-        // ---- The surface the object became -----------------------------------------------------
-
-        val opened = openedId?.let { byId[it]?.obj }
+        val opened = openedIndex?.let { StoryCast[it] }
         if (opened != null && morph.value > 0.001f) {
+            // Anywhere outside the surface puts it back, which is how the real sheet behaves too.
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = morph.value * 0.001f }
+                    .clearAndSetSemantics { }
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { closeRequests++ },
+                    ),
+            )
             StoryDetailSurface(
-                obj = opened,
+                app = opened,
                 morph = morph.value,
                 reveal = reveal.value,
                 stageWidth = stageWidth,
                 stageHeight = stageHeight,
-                chipWidth = chipWidth,
+                chipWidth = stageWidth * StoryStaging.widthFraction(opened),
                 chipCentre = openedCentre,
-                onReveal = { value ->
-                    hasDragged = true
-                    scope.launch { reveal.snapTo(value) }
-                },
+                onReveal = { value -> scope.launch { reveal.snapTo(value) } },
                 onRevealSettled = { target ->
-                    scope.launch {
-                        reveal.animateTo(target, spring(dampingRatio = 0.86f, stiffness = 380f))
-                        if (target >= 1f) {
-                            delay(1100)
-                            if (scene == Scene.Explore) scene = Scene.Gather
+                    scope.launch { reveal.animateTo(target, spring(dampingRatio = 0.86f, stiffness = 380f)) }
+                },
+                onDismiss = { closeRequests++ },
+            )
+        }
+
+
+        if (panelIn.value > 0.01f) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .systemBarsPadding()
+                    .padding(horizontal = 18.dp, vertical = 14.dp),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                Column(Modifier.fillMaxWidth()) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .graphicsLayer {
+                                alpha = panelIn.value
+                                val s = 0.94f + 0.06f * panelIn.value
+                                scaleX = s
+                                scaleY = s
+                            }
+                            .shadow(
+                                elevation = 26.dp,
+                                shape = ManagerTheme.shapes.lg,
+                                clip = false,
+                                ambientColor = colors.ink.copy(alpha = 0.34f),
+                                spotColor = colors.ink.copy(alpha = 0.24f),
+                            )
+                            .clip(ManagerTheme.shapes.lg)
+                            .background(colors.surface)
+                            .padding(20.dp),
+                    ) {
+                        ReclaimBlock(
+                            caption = "COMES BACK",
+                            bytes = selectedApps.sumOf { it.totalBytes },
+                            blocks = selectedApps.map { VizSegment(it.label, it.totalBytes, plotTint(it.tint)) },
+                            lift = lift.value,
+                            departs = true,
+                        )
+                    }
+                    // Reserved from the moment the panel appears, so nothing shifts when the way
+                    // out arrives in it.
+                    Box(Modifier.fillMaxWidth().height(68.dp), contentAlignment = Alignment.BottomCenter) {
+                        if (doneIn.value > 0.01f) {
+                            ManagerButton(
+                                "Open Manager",
+                                onFinish,
+                                fillWidth = true,
+                                modifier = Modifier.graphicsLayer {
+                                    alpha = doneIn.value
+                                    translationY = (1f - doneIn.value) * 22.dp.toPx()
+                                },
+                            )
                         }
                     }
-                },
-            )
-        }
-
-        // ---- Selection, and what selection unlocks ---------------------------------------------
-
-        LaunchedEffect(selection.size) {
-            if (scene != Scene.Gather) return@LaunchedEffect
-            if (selection.isNotEmpty() && capsuleIn.value < 1f) {
-                capsuleIn.animateTo(1f, spring(dampingRatio = 0.78f, stiffness = 400f))
-            }
-            if (selection.isEmpty()) capsuleIn.animateTo(0f, tween(200))
-
-            if (selection.size == 3 && !converged) {
-                converged = true
-                delay(420)
-                // The chosen objects travel into the capsule: the batch is a thing you can see.
-                selection.forEachIndexed { i, id ->
-                    val state = byId[id] ?: return@forEachIndexed
-                    scope.launch {
-                        delay(i * 70L)
-                        launch { state.centre.animateTo(capsuleCentre, ConvergeSpring) }
-                        launch { state.scale.animateTo(0.22f, tween(420, easing = emphasized)) }
-                        launch { state.alpha.animateTo(0f, tween(400, delayMillis = 90)) }
-                    }
                 }
-                delay(1250)
-                if (scene == Scene.Gather) scene = Scene.Resolved
             }
         }
 
-        if (capsuleIn.value > 0.01f) {
-            SelectionCapsule(
-                count = selection.size,
-                progress = capsuleIn.value,
-                centre = capsuleCentre,
-                stageWidth = stageWidth,
-                stageHeight = stageHeight,
-            )
+        // ---- Chrome ---------------------------------------------------------------------------------
+
+        Column(
+            Modifier
+                .fillMaxSize()
+                .systemBarsPadding()
+                .padding(horizontal = 28.dp),
+        ) {
+            Spacer(Modifier.height(18.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ManagerMark(size = 26.dp, animated = true)
+                Spacer(Modifier.width(11.dp))
+                Column {
+                    Txt("Manager", style = ManagerTheme.type.titleM, color = colors.ink)
+                    // Said once, plainly. Nothing on this screen came from the user's phone.
+                    Txt("Sample data", style = ManagerTheme.type.metaS, color = colors.inkTertiary)
+                }
+                Spacer(Modifier.weight(1f))
+                AnimatedVisibility(
+                    visible = phase != Phase.Done,
+                    enter = fadeIn(tween(200)),
+                    exit = fadeOut(tween(200)),
+                ) {
+                    ManagerTextAction("Skip", onFinish, color = colors.inkTertiary)
+                }
+            }
+
+            Spacer(Modifier.weight(1f))
+
+            // The only sentence in the whole screen, and it arrives after every claim in it has
+            // already happened under the reader's own finger.
+            AnimatedVisibility(
+                visible = phase == Phase.Done,
+                enter = fadeIn(tween(420, delayMillis = 120, easing = emphasized)) + slideInVertically(
+                    tween(520, delayMillis = 120, easing = emphasized),
+                ) { it / 4 },
+            ) {
+                Column {
+                    Txt("Your phone,\nweighed.", style = ManagerTheme.type.displayXl, color = colors.ink)
+                    Spacer(Modifier.height(16.dp))
+                    Txt(
+                        "Everything Android already knows about your apps, turned into something " +
+                            "you can act on.",
+                        style = ManagerTheme.type.body,
+                        color = colors.inkSecondary,
+                        modifier = Modifier.fillMaxWidth(0.94f),
+                    )
+                    Spacer(Modifier.height(26.dp))
+                }
+            }
+
+            // The height the bottom slot occupies, so the sentence above never lands under it.
+            Spacer(Modifier.height(if (phase == Phase.Field) 84.dp else 244.dp))
         }
-
-        // ---- Chrome -----------------------------------------------------------------------------
-
-        StoryChrome(
-            scene = scene,
-            cueVisible = cueVisible,
-            selectionCount = selection.size,
-            converged = converged,
-            onSkip = onFinish,
-            onFinish = onFinish,
-        )
     }
 }
 
-// ---- State ------------------------------------------------------------------------------------
+private enum class Phase { Field, Reclaim, Done }
+
+private enum class Invitation { None, Breathe, Hold }
 
 /** One object's live position in fraction space, plus how present it currently is. */
-private class ObjectState(val obj: StoryObject, start: Offset) {
+private class ObjectState(start: Offset) {
     val centre = Animatable(start, Offset.VectorConverter)
     val alpha = Animatable(1f)
     val scale = Animatable(1f)
 }
 
-private val CentreSpring = spring<Offset>(
-    dampingRatio = 0.78f,
-    stiffness = 210f,
-    visibilityThreshold = Offset(0.0004f, 0.0004f),
-)
-
-/** Slower and heavier: the final settle should read as weight coming to rest. */
-private val ResolveSpring = spring<Offset>(
-    dampingRatio = 0.86f,
-    stiffness = 150f,
+private val DisplaceSpring = spring<Offset>(
+    dampingRatio = 0.72f,
+    stiffness = 260f,
     visibilityThreshold = Offset(0.0004f, 0.0004f),
 )
 
 private val ConvergeSpring = spring<Offset>(
     dampingRatio = 0.9f,
-    stiffness = 320f,
+    stiffness = 300f,
     visibilityThreshold = Offset(0.0004f, 0.0004f),
 )
 
-/** A touch that is acknowledged but declined — the object gives, then returns. */
-private fun CoroutineScope.nudge(state: ObjectState) {
-    launch {
-        state.scale.animateTo(0.93f, spring(dampingRatio = 1f, stiffness = 2200f))
-        state.scale.animateTo(1f, spring(dampingRatio = 0.42f, stiffness = 520f))
-    }
-}
-
-// ---- Pieces -----------------------------------------------------------------------------------
-
 /**
- * The capsule the selection converges into — the same silhouette and the same inverse surface the
- * real app uses, so the thing learned here is the thing that ships.
+ * The bar, which is the real selection bar wearing the demonstration's data.
+ *
+ * Idle it weighs the field; selecting, it weighs the selection — same capsule, same inverse
+ * surface, same travelling figure, same glyph buttons. It offers only Remove, because Remove is
+ * the one action the demonstration can honestly carry through: extraction copies real files to
+ * real Downloads, and a button here that pretended to do that would be the one dishonest thing on
+ * the screen. The full bar is one tap away.
  */
 @Composable
-private fun SelectionCapsule(
+private fun StoryLedger(
     count: Int,
-    progress: Float,
-    centre: Offset,
-    stageWidth: Dp,
-    stageHeight: Dp,
+    bytes: Long,
+    selecting: Boolean,
+    presence: Float,
+    onClear: () -> Unit,
+    onRemove: () -> Unit,
 ) {
     val colors = ManagerTheme.colors
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .padding(top = stageHeight * centre.y - 26.dp, start = 10.dp, end = 10.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Row(
-            Modifier
-                .graphicsLayer {
-                    alpha = progress
-                    scaleX = 0.86f + 0.14f * progress
-                    scaleY = 0.86f + 0.14f * progress
-                }
-                .shadow(
-                    elevation = 22.dp,
-                    shape = ManagerTheme.shapes.capsule,
-                    clip = false,
-                    ambientColor = colors.ink.copy(alpha = 0.42f),
-                    spotColor = colors.ink.copy(alpha = 0.3f),
-                )
-                .clip(ManagerTheme.shapes.capsule)
-                .background(colors.surfaceInverse)
-                .padding(horizontal = 15.dp, vertical = 13.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AnimatedContent(
-                targetState = count,
-                transitionSpec = {
-                    (fadeIn(tween(150)) + slideInVertically { it / 2 }) togetherWith
-                        (fadeOut(tween(110)) + slideOutVertically { -it / 2 })
-                },
-                label = "storyCount",
-            ) { value ->
-                Txt("$value", style = ManagerTheme.type.titleM, color = colors.onSurfaceInverse, maxLines = 1)
+    Row(
+        modifier = Modifier
+            .graphicsLayer {
+                alpha = presence
+                val s = 0.88f + 0.12f * presence
+                scaleX = s
+                scaleY = s
             }
-            Spacer(Modifier.width(6.dp))
+            .shadow(
+                elevation = 24.dp,
+                shape = ManagerTheme.shapes.capsule,
+                clip = false,
+                ambientColor = colors.ink.copy(alpha = 0.45f),
+                spotColor = colors.ink.copy(alpha = 0.32f),
+            )
+            .clip(ManagerTheme.shapes.capsule)
+            .background(colors.surfaceInverse)
+            .animateContentSize(spring(dampingRatio = 0.85f, stiffness = 380f))
+            .padding(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        if (selecting) {
+            InverseGlyphButton(ManagerIcons.Close, "Clear selection", onClear, colors.onSurfaceInverse)
+        }
+        Column(Modifier.padding(start = if (selecting) 2.dp else 14.dp, end = 12.dp)) {
             Txt(
-                "selected",
-                style = ManagerTheme.type.meta,
+                if (selecting) "$count selected" else "$count apps",
+                style = ManagerTheme.type.metaS,
                 color = colors.onSurfaceInverse.copy(alpha = 0.62f),
                 maxLines = 1,
             )
-
-            AnimatedVisibility(
-                visible = count >= 3,
-                enter = fadeIn(tween(240, delayMillis = 120)) +
-                    androidx.compose.animation.expandHorizontally(
-                        spring(dampingRatio = 0.85f, stiffness = 320f),
-                    ),
-                exit = fadeOut(tween(120)) + androidx.compose.animation.shrinkHorizontally(),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Spacer(Modifier.width(12.dp))
-                    Box(
-                        Modifier
-                            .width(1.dp)
-                            .height(20.dp)
-                            .background(colors.onSurfaceInverse.copy(alpha = 0.2f)),
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    CapsuleAction(ManagerIcons.Extract, "Extract", colors.onSurfaceInverse)
-                    Spacer(Modifier.width(13.dp))
-                    CapsuleAction(ManagerIcons.Trash, "Remove", colors.emberOnInverse)
-                }
-            }
+            Spacer(Modifier.height(1.dp))
+            CountingBytes(
+                bytes = bytes,
+                valueStyle = ManagerTheme.type.titleM,
+                unitStyle = ManagerTheme.type.metaS,
+                valueColor = colors.onSurfaceInverse,
+                unitColor = colors.onSurfaceInverse.copy(alpha = 0.62f),
+                gap = 3.dp,
+            )
         }
-    }
-}
-
-@Composable
-private fun CapsuleAction(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    tint: androidx.compose.ui.graphics.Color,
-) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        ManagerIcon(icon, null, tint = tint, size = 16.dp)
-        Txt(label, style = ManagerTheme.type.labelS, color = tint, maxLines = 1)
-    }
-}
-
-/**
- * What the five facts turn into.
- *
- * It is the dashboard's own hero, in miniature — which is the point: the last thing the story
- * shows is the first thing the product will.
- */
-@Composable
-private fun SummaryCard(
-    progress: Float,
-    centre: Offset,
-    stageWidth: Dp,
-    stageHeight: Dp,
-) {
-    val colors = ManagerTheme.colors
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .padding(top = stageHeight * centre.y - 52.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            Modifier
-                .width(stageWidth * 0.84f)
-                .graphicsLayer {
-                    alpha = progress
-                    scaleX = 0.9f + 0.1f * progress
-                    scaleY = 0.9f + 0.1f * progress
-                    translationY = (1f - progress) * 16.dp.toPx()
-                }
-                .shadow(
-                    elevation = 4.dp,
-                    shape = SquircleShape(24.dp, 0.7f),
-                    clip = false,
-                    ambientColor = colors.ink.copy(alpha = 0.26f),
-                    spotColor = colors.ink.copy(alpha = 0.18f),
-                )
-                .clip(SquircleShape(24.dp, 0.7f))
-                .background(colors.surface)
-                .padding(horizontal = 20.dp, vertical = 18.dp),
-        ) {
-            Txt("YOUR PHONE", style = ManagerTheme.type.eyebrow, color = colors.inkTertiary)
-            Spacer(Modifier.height(12.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                SummaryStat("360", "apps")
-                SummaryStat("48.2", "GB")
-                SummaryStat("4h 12m", "today")
-            }
+        if (selecting) {
+            Box(
+                Modifier
+                    .width(1.dp)
+                    .height(24.dp)
+                    .background(colors.onSurfaceInverse.copy(alpha = 0.18f)),
+            )
+            Spacer(Modifier.width(1.dp))
+            InverseGlyphButton(ManagerIcons.Trash, "Remove", onRemove, colors.emberOnInverse)
         }
-    }
-}
-
-@Composable
-private fun SummaryStat(value: String, label: String) {
-    Column {
-        Txt(value, style = ManagerTheme.type.displayS, color = ManagerTheme.colors.ink, maxLines = 1)
-        Spacer(Modifier.height(2.dp))
-        Txt(label, style = ManagerTheme.type.metaS, color = ManagerTheme.colors.inkTertiary, maxLines = 1)
-    }
-}
-
-/**
- * Wordmark, escape hatch, and the one line of copy the current beat is entitled to.
- *
- * The copy sits at the bottom for the three beats where the field is the subject, and moves to
- * the top for the one where the surface is — because the surface needs the bottom of the screen
- * and the words should never be the thing the user has to work around.
- */
-@Composable
-private fun StoryChrome(
-    scene: Scene,
-    cueVisible: Boolean,
-    selectionCount: Int,
-    converged: Boolean,
-    onSkip: () -> Unit,
-    onFinish: () -> Unit,
-) {
-    val colors = ManagerTheme.colors
-    val emphasized = ManagerTheme.motion.emphasized
-
-    Column(
-        Modifier
-            .fillMaxSize()
-            .systemBarsPadding()
-            .padding(horizontal = 28.dp),
-    ) {
-        Spacer(Modifier.height(18.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ManagerMark(size = 26.dp, animated = true)
-            Spacer(Modifier.width(11.dp))
-            Txt("Manager", style = ManagerTheme.type.titleM, color = colors.ink)
-            Spacer(Modifier.weight(1f))
-            AnimatedVisibility(
-                visible = scene != Scene.Resolved,
-                enter = fadeIn(tween(200)),
-                exit = fadeOut(tween(200)),
-            ) {
-                ManagerTextAction("Skip intro", onSkip, color = colors.inkTertiary)
-            }
-        }
-
-        // Beat two hands the bottom of the screen to the surface, so the line moves up here.
-        AnimatedVisibility(
-            visible = scene == Scene.Explore,
-            enter = fadeIn(tween(320, delayMillis = 220)) + slideInVertically(
-                tween(420, delayMillis = 220, easing = emphasized),
-            ) { -it / 3 },
-            exit = fadeOut(tween(160)),
-        ) {
-            Column {
-                Spacer(Modifier.height(34.dp))
-                Txt("See where\nyour phone goes.", style = ManagerTheme.type.displayL, color = colors.ink)
-            }
-        }
-
-        Spacer(Modifier.weight(1f))
-
-        AnimatedVisibility(
-            visible = scene != Scene.Explore,
-            enter = fadeIn(tween(300, delayMillis = 140)),
-            exit = fadeOut(tween(140)),
-        ) {
-            Column {
-                AnimatedContent(
-                    targetState = scene,
-                    transitionSpec = {
-                        (
-                            fadeIn(tween(360, delayMillis = 120, easing = emphasized)) +
-                                slideInVertically(
-                                    tween(460, delayMillis = 120, easing = emphasized),
-                                ) { it / 4 }
-                            ) togetherWith (
-                            fadeOut(tween(180)) + slideOutVertically(tween(240)) { -it / 6 }
-                            )
-                    },
-                    label = "storyHeadline",
-                ) { current ->
-                    Column {
-                        when (current) {
-                            Scene.Resolved -> {
-                                Txt("Your phone,\nunderstood.", style = ManagerTheme.type.displayXl, color = colors.ink)
-                                Spacer(Modifier.height(18.dp))
-                                Txt(
-                                    "Manager turns everything Android already knows about your apps " +
-                                        "into something you can actually act on.",
-                                    style = ManagerTheme.type.body,
-                                    color = colors.inkSecondary,
-                                    modifier = Modifier.fillMaxWidth(0.94f),
-                                )
-                            }
-
-                            Scene.Gather -> Txt(
-                                "Now pick a few.",
-                                style = ManagerTheme.type.displayXl,
-                                color = colors.ink,
-                            )
-
-                            else -> Txt(
-                                "There's a lot\ngoing on.",
-                                style = ManagerTheme.type.displayXl,
-                                color = colors.ink,
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                // The cue is a whisper, not an instruction panel: one line, low contrast, and it
-                // rewrites itself as the user makes progress instead of stacking up steps.
-                Box(Modifier.height(26.dp)) {
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = cueVisible && scene != Scene.Resolved && !converged,
-                        enter = fadeIn(tween(420)) + slideInVertically(tween(460)) { it / 3 },
-                        exit = fadeOut(tween(160)),
-                    ) {
-                        CuePulse(
-                            text = when {
-                                scene == Scene.Discovery -> "Touch one."
-                                selectionCount == 0 -> "Hold one."
-                                selectionCount == 1 -> "Two more."
-                                selectionCount == 2 -> "One more."
-                                else -> ""
-                            },
-                        )
-                    }
-                }
-
-                AnimatedVisibility(
-                    visible = scene == Scene.Resolved,
-                    enter = fadeIn(tween(420, delayMillis = 620)) + slideInVertically(
-                        spring(dampingRatio = 0.82f, stiffness = 260f),
-                    ) { it / 2 },
-                    exit = fadeOut(tween(120)),
-                ) {
-                    Column {
-                        Spacer(Modifier.height(14.dp))
-                        ManagerButton("Open Manager", onFinish, fillWidth = true)
-                    }
-                }
-
-                Spacer(Modifier.height(34.dp))
-            }
-        }
-    }
-}
-
-/** The cue breathes rather than blinks — presence without pestering. */
-@Composable
-private fun CuePulse(text: String) {
-    val transition = rememberInfiniteTransition(label = "cue")
-    val pulse by transition.animateFloat(
-        initialValue = 0.55f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = ManagerTheme.motion.standardEase),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "cuePulse",
-    )
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .size(5.dp)
-                .graphicsLayer { alpha = pulse }
-                .clip(ManagerTheme.shapes.capsule)
-                .background(ManagerTheme.colors.signal),
-        )
-        Spacer(Modifier.width(9.dp))
-        Txt(
-            text,
-            style = ManagerTheme.type.labelS,
-            color = ManagerTheme.colors.inkSecondary,
-            maxLines = 1,
-            modifier = Modifier.graphicsLayer { alpha = 0.55f + 0.45f * pulse },
-        )
     }
 }

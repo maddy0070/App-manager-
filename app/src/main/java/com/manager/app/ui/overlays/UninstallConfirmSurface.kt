@@ -50,7 +50,10 @@ import com.manager.app.design.components.ButtonTone
 import com.manager.app.design.components.Hairline
 import com.manager.app.design.components.ManagerButton
 import com.manager.app.design.components.ManagerIcon
+import com.manager.app.design.components.ReclaimBlock
 import com.manager.app.design.components.Txt
+import com.manager.app.design.components.VizSegment
+import com.manager.app.design.plotTint
 import com.manager.app.util.Format
 
 /**
@@ -78,6 +81,7 @@ fun UninstallConfirmSurface(
     val removable = rendered.filter { it.isUninstallable }
     val blocked = rendered.size - removable.size
     val reclaim = removable.sumOf { it.totalBytes }
+    val measured = removable.isNotEmpty() && removable.all { it.storage != null }
 
     Box(Modifier.fillMaxSize()) {
         AnimatedVisibility(visible = visible, enter = fadeIn(tween(200)), exit = fadeOut(tween(180))) {
@@ -130,26 +134,38 @@ fun UninstallConfirmSurface(
                             ManagerIcon(ManagerIcons.Trash, null, tint = colors.ember, size = 20.dp)
                         }
                         Spacer(Modifier.width(15.dp))
-                        Column(Modifier.weight(1f)) {
-                            Txt(
-                                if (removable.size == 1) {
-                                    "Uninstall ${removable.firstOrNull()?.label ?: "app"}?"
-                                } else {
-                                    "Uninstall ${removable.size} apps?"
-                                },
-                                style = ManagerTheme.type.titleL,
-                                color = colors.ink,
-                                maxLines = 2,
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Txt(
-                                "Frees about ${Format.bytes(reclaim)}",
-                                style = ManagerTheme.type.metaS,
-                                color = colors.inkTertiary,
-                                maxLines = 1,
-                            )
-                        }
+                        Txt(
+                            if (removable.size == 1) {
+                                "Uninstall ${removable.firstOrNull()?.label ?: "app"}?"
+                            } else {
+                                "Uninstall ${removable.size} apps?"
+                            },
+                            style = ManagerTheme.type.titleL,
+                            color = colors.ink,
+                            maxLines = 2,
+                            modifier = Modifier.weight(1f),
+                        )
                     }
+
+                    // The reason, given its own weight. "Frees about 4.82 GB" as a caption is a
+                    // footnote; the same figure with the batch drawn underneath it is the answer
+                    // to the only question anyone is actually asking here.
+                    if (removable.isNotEmpty()) {
+                        Spacer(Modifier.height(22.dp))
+                        ReclaimBlock(
+                            caption = "COMES BACK",
+                            bytes = reclaim,
+                            blocks = removable.mapIndexed { index, entry ->
+                                VizSegment(entry.label, entry.totalBytes, plotTint(index))
+                            },
+                            note = if (measured) {
+                                null
+                            } else {
+                                "Measured from APK size on disk. App data and cache need usage access."
+                            },
+                        )
+                    }
+
                     Spacer(Modifier.height(18.dp))
                     Txt(
                         if (removable.size == 1) {

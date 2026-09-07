@@ -264,6 +264,52 @@ fun ManagerIcon(
     )
 }
 
+/**
+ * A glyph control on the inverse capsule — the action bar's only button shape.
+ *
+ * It has no container of its own until pressed, because a row of filled buttons inside an already
+ * filled capsule reads as a toolbar rather than as one object. The 19dp glyph plus its padding is
+ * exactly the 44dp minimum target.
+ */
+@Composable
+fun InverseGlyphButton(
+    icon: ImageVector,
+    description: String,
+    onClick: () -> Unit,
+    tint: Color,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val fill by animateColorAsState(
+        targetValue = if (pressed) tint.copy(alpha = 0.16f) else Color.Transparent,
+        animationSpec = tween(130),
+        label = "inverseGlyphFill",
+    )
+    Box(
+        modifier
+            .pressResponse(interaction, enabled, pressedScale = 0.9f)
+            .clip(ManagerTheme.shapes.capsule)
+            .background(fill)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .padding(12.5.dp),
+    ) {
+        ManagerIcon(
+            icon,
+            description,
+            tint = if (enabled) tint else tint.copy(alpha = 0.35f),
+            size = 19.dp,
+        )
+    }
+}
+
 /** Provides a content colour to a subtree without pulling in Material's colour scheme. */
 @Composable
 fun ProvideContentColor(color: Color, content: @Composable () -> Unit) {

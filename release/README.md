@@ -6,12 +6,12 @@
 |---|---|
 | Package | `com.manager.app` |
 | Version | 1.0 (versionCode 1) |
-| Size | 3109264 bytes (2.97 MiB) |
+| Size | 3125648 bytes (2.98 MiB) |
 | minSdk / targetSdk | 29 / 36 |
 | ABIs | arm64-v8a, armeabi-v7a, x86, x86_64 |
 | Signature | v2 scheme, `CN=Manager Debug, O=Personal, C=US` |
 | Signing cert SHA-256 | `21aae7670ce4f7c81a519415566a07df021c0f612151cab9b52c0a5b45101d42` |
-| APK SHA-256 | `fe37d9447354ac71d0837383e6b1edef88729cf2a5ad0b73d72f0025324d122c` |
+| APK SHA-256 | `61bc56225f5e82b114598271fac4a9d463778547f4a1d124ec0a931254be4b4e` |
 
 ## Installing on a Pixel
 
@@ -28,13 +28,15 @@ Verify the download first if you like:
 
 ```bash
 sha256sum Manager-release.apk
-# fe37d9447354ac71d0837383e6b1edef88729cf2a5ad0b73d72f0025324d122c
+# 61bc56225f5e82b114598271fac4a9d463778547f4a1d124ec0a931254be4b4e
 ```
 
 ## After installing
 
-Onboarding is a short interactive story on sample data — open an app, drag its surface, select a
-few, watch the field resolve. It asks for nothing and touches none of your real apps.
+Onboarding is a field of five sample apps drawn at the width of what they weigh, with a bar that
+states the weight of whatever is in play. Touch one to open it, drag the surface to take its figure
+apart, hold to select, remove the batch and watch the measurement leave. It asks for nothing and
+touches none of your real apps.
 
 **Usage access** is explained where it matters instead: the dashboard carries a panel saying what
 it unlocks (screen-time ranking and exact app sizes) with a link to the Settings page, and the

@@ -244,6 +244,9 @@ private fun MainShell(viewModel: ManagerViewModel, graph: ManagerGraph) {
                 val selected = viewModel.selectedEntries()
                 SelectionBar(
                     count = browse.selection.size,
+                    bytes = selected.sumOf { it.totalBytes },
+                    // Every selected app has to have been measured for the sum to be a measurement.
+                    measured = selected.isNotEmpty() && selected.all { it.storage != null },
                     allSelected = browse.selection.isNotEmpty() && browse.selection.size >= visible.size,
                     canExtract = selected.isNotEmpty(),
                     canUninstall = selected.any { it.isUninstallable },

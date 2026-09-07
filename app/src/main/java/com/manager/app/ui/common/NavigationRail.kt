@@ -8,15 +8,15 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -39,10 +39,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.manager.app.design.ManagerIcons
 import com.manager.app.design.ManagerTheme
+import com.manager.app.design.components.CountingBytes
+import com.manager.app.design.components.InverseGlyphButton
 import com.manager.app.design.components.ManagerIcon
 import com.manager.app.design.components.Txt
 import com.manager.app.design.components.pressResponse
 import com.manager.app.ui.Destination
+import com.manager.app.util.Format
 
 /**
  * The floating navigation bar.
@@ -154,10 +157,19 @@ private fun NavigationItem(
 /**
  * The selection action bar occupies the same slot as the navigation bar and shares its capsule,
  * so entering selection mode reads as the bar changing job rather than a new bar appearing.
+ *
+ * It carries the weight of the selection, not just its count, because the count is rarely the
+ * question. "Three apps" is trivia; "three apps, 4.82 GB" is a decision. The figure travels
+ * between values rather than being replaced, so adding an app reads as weight accumulating.
+ *
+ * @param measured false when at least one selected app has no StorageStats figure and its size is
+ * the APK on disk. The total is then prefixed rather than quietly presented as the whole truth.
  */
 @Composable
 fun SelectionBar(
     count: Int,
+    bytes: Long,
+    measured: Boolean,
     allSelected: Boolean,
     canExtract: Boolean,
     canUninstall: Boolean,
@@ -168,6 +180,7 @@ fun SelectionBar(
     modifier: Modifier = Modifier,
 ) {
     val colors = ManagerTheme.colors
+    val emphasized = ManagerTheme.motion.emphasized
     Row(
         modifier = modifier
             .shadow(
@@ -179,100 +192,86 @@ fun SelectionBar(
             )
             .clip(ManagerTheme.shapes.capsule)
             .background(colors.surfaceInverse)
-            .padding(start = 8.dp, end = 8.dp, top = 7.dp, bottom = 7.dp),
+            .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        SelectionGlyphButton(ManagerIcons.Close, "Leave selection", onDismiss, colors.onSurfaceInverse)
+        InverseGlyphButton(ManagerIcons.Close, "Leave selection", onDismiss, colors.onSurfaceInverse)
 
-        AnimatedContent(
-            targetState = count,
-            transitionSpec = {
-                val up = targetState > initialState
-                (
-                    fadeIn(tween(160)) + scaleIn(initialScale = if (up) 0.7f else 1.25f, animationSpec = tween(200))
-                    ) togetherWith (
-                    fadeOut(tween(120)) + scaleOut(targetScale = if (up) 1.25f else 0.7f, animationSpec = tween(160))
-                    )
-            },
-            label = "selectionCount",
-        ) { value ->
-            Txt(
-                "$value",
-                style = ManagerTheme.type.titleM,
-                color = colors.onSurfaceInverse,
-                maxLines = 1,
-                modifier = Modifier.padding(horizontal = 4.dp),
+        Column(
+            Modifier
+                .padding(start = 2.dp, end = 10.dp)
+                // One reading, not three fragments: a screen reader should hear the decision.
+                .clearAndSetSemantics {
+                    contentDescription = buildString {
+                        append(count)
+                        append(if (count == 1) " app selected, " else " apps selected, ")
+                        append(if (measured) "" else "about ")
+                        append(Format.bytes(bytes))
+                        if (!measured) append(", measured from APK size on disk")
+                    }
+                },
+        ) {
+            AnimatedContent(
+                targetState = count,
+                transitionSpec = {
+                    val up = targetState > initialState
+                    (
+                        fadeIn(tween(140)) + slideInVertically(tween(200, easing = emphasized)) {
+                            if (up) it / 2 else -it / 2
+                        }
+                        ) togetherWith (
+                        fadeOut(tween(100)) + slideOutVertically(tween(160)) { if (up) -it / 2 else it / 2 }
+                        )
+                },
+                label = "selectionCount",
+            ) { value ->
+                Txt(
+                    "$value selected",
+                    style = ManagerTheme.type.metaS,
+                    color = colors.onSurfaceInverse.copy(alpha = 0.62f),
+                    maxLines = 1,
+                )
+            }
+            Spacer(Modifier.height(1.dp))
+            CountingBytes(
+                bytes = bytes,
+                valueStyle = ManagerTheme.type.titleM,
+                unitStyle = ManagerTheme.type.metaS,
+                valueColor = colors.onSurfaceInverse,
+                unitColor = colors.onSurfaceInverse.copy(alpha = 0.62f),
+                prefix = if (measured) "" else "≈",
+                gap = 3.dp,
             )
         }
-        Txt(
-            if (count == 1) "app" else "apps",
-            style = ManagerTheme.type.meta,
-            color = colors.onSurfaceInverse.copy(alpha = 0.6f),
-            maxLines = 1,
-        )
 
-        Spacer(Modifier.width(6.dp))
         Box(
             Modifier
                 .width(1.dp)
-                .height(22.dp)
+                .height(24.dp)
                 .background(colors.onSurfaceInverse.copy(alpha = 0.18f)),
         )
-        Spacer(Modifier.width(2.dp))
+        Spacer(Modifier.width(1.dp))
 
-        SelectionGlyphButton(
+        InverseGlyphButton(
             icon = ManagerIcons.CheckSolid,
             description = if (allSelected) "Deselect all" else "Select all",
             onClick = onSelectAll,
             tint = if (allSelected) colors.onSurfaceInverse else colors.onSurfaceInverse.copy(alpha = 0.72f),
         )
-        SelectionGlyphButton(
+        InverseGlyphButton(
             icon = ManagerIcons.Extract,
             description = "Extract APKs",
             onClick = onExtract,
             tint = colors.onSurfaceInverse,
             enabled = canExtract,
         )
-        SelectionGlyphButton(
+        InverseGlyphButton(
             icon = ManagerIcons.Trash,
             description = "Uninstall",
             onClick = onUninstall,
             tint = colors.emberOnInverse,
             enabled = canUninstall,
-        )
-    }
-}
-
-@Composable
-private fun SelectionGlyphButton(
-    icon: ImageVector,
-    description: String,
-    onClick: () -> Unit,
-    tint: androidx.compose.ui.graphics.Color,
-    enabled: Boolean = true,
-) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val fill by animateColorAsState(
-        targetValue = if (pressed) tint.copy(alpha = 0.16f) else androidx.compose.ui.graphics.Color.Transparent,
-        animationSpec = tween(130),
-        label = "selectionGlyphFill",
-    )
-    Box(
-        Modifier
-            .pressResponse(interaction, enabled, pressedScale = 0.9f)
-            .clip(ManagerTheme.shapes.capsule)
-            .background(fill)
-            .clickable(interactionSource = interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
-            // 19dp glyph plus this padding is exactly the 44dp minimum.
-            .padding(12.5.dp),
-    ) {
-        ManagerIcon(
-            icon,
-            description,
-            tint = if (enabled) tint else tint.copy(alpha = 0.35f),
-            size = 19.dp,
         )
     }
 }
